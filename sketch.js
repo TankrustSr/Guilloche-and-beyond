@@ -120,9 +120,6 @@ function setup() {
   updateLabelsAndRedraw();
 }
 
-/* ===========================
-   SIDEBAR GUI
-   =========================== */
 function setupSidebarGUI() {
   uiPanel = createDiv();
   uiPanel.id("ui-panel");
@@ -155,6 +152,50 @@ function setupSidebarGUI() {
     ctrlWrap.style("margin-top:6px;");
 
     return { row, label, ctrlWrap, val };
+  }
+
+  // same as addRow but places the created row into an arbitrary parent element
+  function addRowTo(parentEl, labelText) {
+    const row = createDiv().parent(parentEl);
+    row.style("margin-bottom: 12px");
+
+    const label = createP(labelText).parent(row);
+    label.style("margin:0 0 6px 0; font-size:13px; color:#ddd;");
+
+    const val = createSpan("").parent(row);
+    val.style("float:right; color:#9bd; font-weight:600; cursor:pointer;");
+
+    const ctrlWrap = createDiv().parent(row);
+    ctrlWrap.style("margin-top:6px;");
+
+    return { row, label, ctrlWrap, val };
+  }
+
+  // helper to create collapsible section
+  function createCollapsible(title, initiallyOpen = true) {
+    const header = createDiv().parent(uiPanel);
+    header.style("display:flex; align-items:center; justify-content:space-between; cursor:pointer; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.03); margin-bottom:8px;");
+    const titleP = createP(title).parent(header);
+    titleP.style("margin:0; font-size:13px; color:#ddd;");
+
+    const caret = createSpan(initiallyOpen ? "▾" : "▸").parent(header);
+    caret.style("color:#9bd; font-weight:700;");
+
+    const content = createDiv().parent(uiPanel);
+    content.style(`margin-bottom:12px; display:${initiallyOpen ? "block" : "none"};`);
+
+    header.mousePressed(() => {
+      const isOpen = content.style("display") !== "none";
+      if (isOpen) {
+        content.style("display", "none");
+        caret.html("▸");
+      } else {
+        content.style("display", "block");
+        caret.html("▾");
+      }
+    });
+
+    return { header, content, caret };
   }
 
   // --- Layer selector + add/delete/duplicate + color ---
@@ -376,18 +417,20 @@ function setupSidebarGUI() {
   valueSpans.duty = rDuty.val;
 
   /* --------------------
-     Secondary S&H Modulation
+     Secondary S&H Modulation (collapsible)
      -------------------- */
-  let shH = addRow("Secondary S&H Enabled");
+  const shPanel = createCollapsible("Secondary Sample & Hold (S&H) — modulation", true);
+  // Put S&H controls into shPanel.content using addRowTo
+  let shH = addRowTo(shPanel.content, "Secondary S&H Enabled");
   sh2EnabledCheckbox = createCheckbox("", false).parent(shH.ctrlWrap);
   sh2EnabledCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
-  let shF = addRow("S&H Frequency (cycles per segment)");
+  let shF = addRowTo(shPanel.content, "S&H Frequency (cycles per segment)");
   sh2FreqSlider = createSlider(0.1, 60, 8, 0.1).parent(shF.ctrlWrap);
   sh2FreqSlider.style("width:100%");
   sh2FreqSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
-  let shA = addRow("S&H Amplitude (+ only)");
+  let shA = addRowTo(shPanel.content, "S&H Amplitude (+ only)");
   sh2AmpSlider = createSlider(0, 200, 20, 0.1).parent(shA.ctrlWrap); // scale matches amp units
   sh2AmpSlider.style("width:100%");
   sh2AmpSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
@@ -411,25 +454,27 @@ function setupSidebarGUI() {
   valueSpans.lineWEnd = rLW2.val;
 
   /* --------------------
-     EROSION (Perlin noise) UI
+     EROSION (Perlin noise) UI (collapsible)
      -------------------- */
-  let erH = addRow("Enable Erosion (Perlin)");
+  const erPanel = createCollapsible("Erosion (Perlin noise)", false);
+  // Put erosion controls into erPanel.content using addRowTo
+  let erH = addRowTo(erPanel.content, "Enable Erosion (Perlin)");
   erosionEnabledCheckbox = createCheckbox("", false).parent(erH.ctrlWrap);
   erosionEnabledCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
-  let erS = addRow("Erosion Noise Scale");
+  let erS = addRowTo(erPanel.content, "Erosion Noise Scale");
   erosionScaleSlider = createSlider(0.30, 10, 2.0, 0.01).parent(erS.ctrlWrap);
   erosionScaleSlider.style("width:100%");
   erosionScaleSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.erosionScale = erS.val;
 
-  let erT = addRow("Erosion Threshold");
+  let erT = addRowTo(erPanel.content, "Erosion Threshold");
   erosionThresholdSlider = createSlider(0.36, 1, 0.5, 0.01).parent(erT.ctrlWrap);
   erosionThresholdSlider.style("width:100%");
   erosionThresholdSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.erosionThreshold = erT.val;
 
-  let erD = addRow("Erosion Decay (center → edge)");
+  let erD = addRowTo(erPanel.content, "Erosion Decay (center → edge)");
   erosionDecaySlider = createSlider(0, 1, 0.5, 0.01).parent(erD.ctrlWrap);
   erosionDecaySlider.style("width:100%");
   erosionDecaySlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
