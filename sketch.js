@@ -3,6 +3,8 @@
    - Log distribution affects radial placement for circles, radiating lines, and Fibonacci spirals
    - Fibonacci reverse properly reverses direction while keeping same start point
    - numSpiralTurns per-layer slider + SVG export
+   - NEW: Per-layer Circular Array mode — distribute centered shapes around a ring with per-instance scaling and radial spread
+     * Auto-orient option (facing outward) implemented
 */
 
 /* --------------------
@@ -10,8 +12,7 @@
    -------------------- */
 let layerSelect, addLayerBtn, delLayerBtn, dupLayerBtn, layerColorPicker;
 let startRSlider, endRSlider;
-let polySidesStartSlider, polySidesEndSlider;
-let startShapeSelect, endShapeSelect;
+let polySidesStartSlider, polySidesEndSlider, startShapeSelect, endShapeSelect;
 let freqSlider, ampStartSlider, ampEndSlider, countSlider, rotSlider;
 let waveMenu, dutySlider;
 let lineWStartSlider, lineWEndSlider;
@@ -31,6 +32,10 @@ const SIDEBAR_WIDTH = 300;
 let sh2EnabledCheckbox;
 let sh2FreqSlider, sh2AmpSlider;
 
+/* --- Circular Array controls (UI elements) --- */
+let circularArrayCheckbox; // per-layer checkbox element
+let arrayScaleStartSlider, arrayScaleEndSlider, radialSpreadSlider;
+
 /* --- Layers state --- */
 let layers = [];
 let selectedLayerIndex = 0;
@@ -49,7 +54,7 @@ const LINE_STEP_T = 0.002;      // per-line sampling for radiating lines
 const CURVE_STEP_ANGLE = 0.002; // per-angle sampling for curves
 
 /* ==========================================================
-   Layer object
+   Layer object (now includes circular-array properties)
    ========================================================== */
 function createDefaultLayer(name = "Layer") {
   return {
@@ -80,7 +85,12 @@ function createDefaultLayer(name = "Layer") {
     erosionDecay: 0.5,
     // Fibonacci options
     fibonacciReversed: false,
-    numSpiralTurns: 4 // default number of turns for Fibonacci spiral
+    numSpiralTurns: 4, // default number of turns for Fibonacci spiral
+    // Circular array per-layer settings
+    circularArrayEnabled: false,
+    arrayScaleStart: 100, // percent
+    arrayScaleEnd: 100,   // percent
+    radialSpread: 0       // 0..1
   };
 }
 
@@ -163,7 +173,8 @@ function setupSidebarGUI() {
   addLayerBtn.mousePressed(() => {
     const idx = layers.length + 1;
     const newLayer = createDefaultLayer("Layer " + idx);
-    updateLayerFromUI(newLayer); // copy current UI into new layer
+    // copy current UI into new layer so new layer starts from current settings
+    updateLayerFromUI(newLayer);
     layers.push(newLayer);
     selectedLayerIndex = layers.length - 1;
     rebuildLayerList();
@@ -440,6 +451,32 @@ function setupSidebarGUI() {
   valueSpans.canvasScaleY = rCSY.val;
 
   /* --------------------
+     Circular Array controls (per-layer)
+     -------------------- */
+  const arrRow = addRow("Circular Array Mode (per-layer)");
+  // We'll create the UI elements but their values will be synced to the selected layer
+  circularArrayCheckbox = createCheckbox("Enable Circular Array", false).parent(arrRow.ctrlWrap);
+  circularArrayCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  const scaleRow = addRow("Array Scale Start (%)");
+  arrayScaleStartSlider = createSlider(1, 400, 100, 1).parent(scaleRow.ctrlWrap);
+  arrayScaleStartSlider.style("width:100%");
+  arrayScaleStartSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.arrayScaleStart = scaleRow.val;
+
+  const scaleRow2 = addRow("Array Scale End (%)");
+  arrayScaleEndSlider = createSlider(1, 400, 100, 1).parent(scaleRow2.ctrlWrap);
+  arrayScaleEndSlider.style("width:100%");
+  arrayScaleEndSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.arrayScaleEnd = scaleRow2.val;
+
+  const spreadRow = addRow("Radial Spread (0 = centerLine only → 1 = start→end)");
+  radialSpreadSlider = createSlider(0, 1, 0, 0.01).parent(spreadRow.ctrlWrap);
+  radialSpreadSlider.style("width:100%");
+  radialSpreadSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.radialSpread = spreadRow.val;
+
+  /* --------------------
      Export & Reset
      -------------------- */
   const btnWrap = createDiv().parent(uiPanel);
@@ -621,6 +658,9 @@ function setupInlineEditableFields() {
   if (valueSpans.numSpirals) {
     if (numSpiralsSlider) attachEditable(valueSpans.numSpirals, numSpiralsSlider, { isInt: true });
   }
+  if (valueSpans.arrayScaleStart) attachEditable(valueSpans.arrayScaleStart, arrayScaleStartSlider);
+  if (valueSpans.arrayScaleEnd) attachEditable(valueSpans.arrayScaleEnd, arrayScaleEndSlider);
+  if (valueSpans.radialSpread) attachEditable(valueSpans.radialSpread, radialSpreadSlider);
 }
 
 /* --------------------
@@ -664,6 +704,12 @@ function syncUIToLayer() {
   // fib reverse button has no separate visual indicator; we show value in span
   if (valueSpans.fibReverse) valueSpans.fibReverse.html(l.fibonacciReversed ? "Reversed" : "");
 
+  // circular array values are now per-layer
+  if (circularArrayCheckbox) circularArrayCheckbox.checked(!!l.circularArrayEnabled);
+  if (arrayScaleStartSlider) arrayScaleStartSlider.value(l.arrayScaleStart);
+  if (arrayScaleEndSlider) arrayScaleEndSlider.value(l.arrayScaleEnd);
+  if (radialSpreadSlider) radialSpreadSlider.value(l.radialSpread);
+
   updateRotationRangeFromShapeSelectors();
   updateLabelsAndRedraw();
 }
@@ -704,6 +750,12 @@ function updateLayerFromUI(layerObj) {
   // store per-layer Fibonacci turns if control exists
   if (numSpiralsSlider) l.numSpiralTurns = int(numSpiralsSlider.value());
   // fibonacciReversed toggled by button (already stored)
+
+  // circular array per-layer storage
+  if (circularArrayCheckbox) l.circularArrayEnabled = circularArrayCheckbox.checked();
+  if (arrayScaleStartSlider) l.arrayScaleStart = Number(arrayScaleStartSlider.value());
+  if (arrayScaleEndSlider) l.arrayScaleEnd = Number(arrayScaleEndSlider.value());
+  if (radialSpreadSlider) l.radialSpread = Number(radialSpreadSlider.value());
 
   // (log distribution remains a global slider for now)
 }
@@ -820,6 +872,10 @@ function updateLabelsAndRedraw() {
     valueSpans.fibReverse.html(l && l.fibonacciReversed ? "Reversed" : "");
   }
 
+  if (valueSpans.arrayScaleStart && arrayScaleStartSlider) valueSpans.arrayScaleStart.html(arrayScaleStartSlider.value());
+  if (valueSpans.arrayScaleEnd && arrayScaleEndSlider) valueSpans.arrayScaleEnd.html(arrayScaleEndSlider.value());
+  if (valueSpans.radialSpread && radialSpreadSlider) valueSpans.radialSpread.html(nf(radialSpreadSlider.value(), 1, 2));
+
   redraw();
 }
 
@@ -875,24 +931,72 @@ function draw() {
       // We must apply logarithmic distribution to how shapes are distributed radially.
       let logVal = window.logDistSlider ? Number(window.logDistSlider.value()) : 0;
 
-      for (let i = 0; i < L.count; i++) {
-        let tLayer = L.count > 1 ? i / (L.count - 1) : 0; // linear t across shapes (used for morph)
-        // map tLayer with log distribution to position radius
-        let mappedRadT = applyDistribution(tLayer, logVal);
-        let radius = lerp(L.startR, L.endR, mappedRadT);
+      // If circular array enabled for this layer, draw count instances arranged around circle
+      const circularEnabled = !!L.circularArrayEnabled;
+      if (circularEnabled) {
+        const arrayCount = max(1, int(L.count));
+        const scaleStart = (L.arrayScaleStart || 100) / 100.0;
+        const scaleEnd = (L.arrayScaleEnd || 100) / 100.0;
+        const radialSpread = L.radialSpread || 0.0;
 
-        // morph parameter between start/end shape should remain linear (tLayer)
-        let morphT = tLayer;
+        for (let j = 0; j < arrayCount; j++) {
+          let t = arrayCount > 1 ? j / (arrayCount - 1) : 0;
+          // radial position between startR (center line) and endR (outer) controlled by radialSpread
+          // Interpretation: startR is center line radius, endR is outer radius ring; radialSpread scales how far along that interval instances move
+          let rPos = lerp(L.startR, L.endR, radialSpread * t);
 
-        let amp = lerp(L.ampStart, L.ampEnd, tLayer);
-        let shift = i * radians(L.rotOffsetDeg);
+          // angle evenly distributed
+          let angle = j * TWO_PI / arrayCount;
 
-        let lwActual = lerp(L.lineWStart, L.lineWEnd, tLayer);
-        strokeWeight(max(0.1, lwActual));
+          // per-instance scaling
+          let instScale = lerp(scaleStart, scaleEnd, t);
 
-        beginShape();
-        drawSampledShape(radius, shift, L.freq, amp, L.wave, L.duty, L.startShape, L.endShape, morphT, L.polySidesStart, L.polySidesEnd, li);
-        endShape(CLOSE);
+          // morph parameter — keep 0..1 mapping across instances same as other uses:
+          let mappedRadT = applyDistribution(t, logVal);
+          let baseRadius = lerp(L.startR, L.endR, mappedRadT);
+
+          push();
+          // move the origin to placement point (centered)
+          translate(rPos * cos(angle), rPos * sin(angle));
+          // rotate each instance to face outward (auto-orient)
+          // Facing outward: rotate by angle so the "top" of the shape points away from center.
+          rotate(angle + radians(L.rotOffsetDeg));
+          // scale instance
+          scale(instScale);
+
+          // stroke weight must be scaled back so lines don't get too thin; set stroke weight per instance inversely to scale
+          let lwActual = lerp(L.lineWStart, L.lineWEnd, t) / max(0.0001, instScale);
+          strokeWeight(max(0.1, lwActual));
+
+          // draw the sampled shape centered at origin — use baseRadius as the radius param
+          beginShape();
+          // Use morphT = 0 here for instances (you can adjust if you want per-instance morphing)
+          drawSampledShape(baseRadius, 0, L.freq, lerp(L.ampStart, L.ampEnd, t), L.wave, L.duty, L.startShape, L.endShape, 0, L.polySidesStart, L.polySidesEnd, li);
+          endShape(CLOSE);
+
+          pop();
+        }
+      } else {
+        // original behavior — draw concentric/morphed shapes
+        for (let i = 0; i < L.count; i++) {
+          let tLayer = L.count > 1 ? i / (L.count - 1) : 0; // linear t across shapes (used for morph)
+          // map tLayer with log distribution to position radius
+          let mappedRadT = applyDistribution(tLayer, logVal);
+          let radius = lerp(L.startR, L.endR, mappedRadT);
+
+          // morph parameter between start/end shape should remain linear (tLayer)
+          let morphT = tLayer;
+
+          let amp = lerp(L.ampStart, L.ampEnd, tLayer);
+          let shift = i * radians(L.rotOffsetDeg);
+
+          let lwActual = lerp(L.lineWStart, L.lineWEnd, tLayer);
+          strokeWeight(max(0.1, lwActual));
+
+          beginShape();
+          drawSampledShape(radius, shift, L.freq, amp, L.wave, L.duty, L.startShape, L.endShape, morphT, L.polySidesStart, L.polySidesEnd, li);
+          endShape(CLOSE);
+        }
       }
     }
 
@@ -1315,22 +1419,55 @@ function exportSVG(isHighPrecision = false) {
     } else if (useFibonacci) {
       drawFibonacciLinesSVG(svg, L, li);
     } else {
-      for (let i = 0; i < L.count; i++) {
-        let tLayer = L.count > 1 ? i / (L.count - 1) : 0;
-        // apply log distribution in SVG same as on-canvas
-        let logVal = window.logDistSlider ? Number(window.logDistSlider.value()) : 0;
-        let mappedRadT = applyDistribution(tLayer, logVal);
-        let radius = lerp(L.startR, L.endR, mappedRadT);
-        let shift = i * radians(L.rotOffsetDeg);
+      // For SVG export: if circular array enabled for this layer, render the same array copies into SVG
+      const circularEnabled = !!L.circularArrayEnabled;
+      let logVal = window.logDistSlider ? Number(window.logDistSlider.value()) : 0;
 
-        let ampA = lerp(L.ampStart, L.ampEnd, tLayer);
-        let lwA  = lerp(L.lineWStart,  L.lineWEnd,  tLayer);
+      if (circularEnabled) {
+        const arrayCount = max(1, int(L.count));
+        const scaleStart = (L.arrayScaleStart || 100) / 100.0;
+        const scaleEnd = (L.arrayScaleEnd || 100) / 100.0;
+        const radialSpread = L.radialSpread || 0.0;
 
-        svg.strokeWeight(max(0.1, lwA));
-        svg.beginShape();
-        drawSampledShapeSVG(svg, radius, shift, L.freq, ampA, L.wave, L.duty,
-          L.startShape, L.endShape, tLayer, L.polySidesStart, L.polySidesEnd, li);
-        svg.endShape(CLOSE);
+        for (let j = 0; j < arrayCount; j++) {
+          let t = arrayCount > 1 ? j / (arrayCount - 1) : 0;
+          let rPos = lerp(L.startR, L.endR, radialSpread * t);
+          let angle = j * TWO_PI / arrayCount;
+          let instScale = lerp(scaleStart, scaleEnd, t);
+          let mappedRadT = applyDistribution(t, logVal);
+          let baseRadius = lerp(L.startR, L.endR, mappedRadT);
+
+          svg.push();
+          svg.translate(rPos * cos(angle), rPos * sin(angle));
+          svg.rotate(angle + radians(L.rotOffsetDeg));
+          svg.scale(instScale);
+
+          let lwActual = lerp(L.lineWStart, L.lineWEnd, t) / max(0.0001, instScale);
+          svg.strokeWeight(max(0.1, lwActual));
+
+          svg.beginShape();
+          drawSampledShapeSVG(svg, baseRadius, 0, L.freq, lerp(L.ampStart, L.ampEnd, t), L.wave, L.duty,
+            L.startShape, L.endShape, 0, L.polySidesStart, L.polySidesEnd, li);
+          svg.endShape(CLOSE);
+
+          svg.pop();
+        }
+      } else {
+        for (let i = 0; i < L.count; i++) {
+          let tLayer = L.count > 1 ? i / (L.count - 1) : 0;
+          let mappedRadT = applyDistribution(tLayer, logVal);
+          let radius = lerp(L.startR, L.endR, mappedRadT);
+          let shift = i * radians(L.rotOffsetDeg);
+
+          let ampA = lerp(L.ampStart, L.ampEnd, tLayer);
+          let lwA  = lerp(L.lineWStart,  L.lineWEnd,  tLayer);
+
+          svg.strokeWeight(max(0.1, lwA));
+          svg.beginShape();
+          drawSampledShapeSVG(svg, radius, shift, L.freq, ampA, L.wave, L.duty,
+            L.startShape, L.endShape, tLayer, L.polySidesStart, L.polySidesEnd, li);
+          svg.endShape(CLOSE);
+        }
       }
     }
 
