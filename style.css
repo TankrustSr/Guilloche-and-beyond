@@ -1,7 +1,45 @@
+/* base */
 html, body {
   margin: 0;
   padding: 0;
 }
 canvas {
   display: block;
+}
+
+/* sidebar: 2-column grid container */
+#ui-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 12px;
+  row-gap: 10px;
+}
+
+/* grid helpers */
+#ui-panel .full {
+  grid-column: 1 / span 2;
+}
+#ui-panel .half {
+  grid-column: auto; /* occupies one column */
+}
+
+/* make collapsible section bodies two-column capable as well */
+.section-content.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 12px;
+  row-gap: 10px;
+}
+
+/* controls */
+#ui-panel input[type="range"],
+#ui-panel select,
+#ui-panel button,
+#ui-panel input[type="number"],
+#ui-panel .p5ColorPicker {
+  width: 100%;
+  box-sizing: border-box;
+}
+#ui-panel p {
+  margin: 0 0 6px 0;
 }
