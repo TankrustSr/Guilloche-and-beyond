@@ -1,10 +1,15 @@
 /*  CONFIGURABLE WAVY CIRCLES / POLYGONS — ULTRA SMOOTH EDITION
-   Consolidated baseline with fixes + curated 2-column GUI:
-   - Keeps all drawing/export logic intact
-   - Adds 2-column layout for selected pairs (Start/End Radius, Poly Sides, Amplitude, Canvas Scale X/Y, Array Scale Start/End)
-   - Leaves complex blocks (layers, collapsibles, export, etc.) full-width for clarity
+   Consolidated baseline with fixes:
+   - Log distribution affects radial placement for circles, radiating lines, and Fibonacci spirals
+   - Fibonacci reverse properly reverses direction while keeping same start point
+   - numSpiralTurns per-layer slider + SVG export
+   - NEW: Per-layer Circular Array mode — distribute centered shapes around a ring with per-instance scaling and radial spread
+     * Auto-orient option (facing outward) implemented
 */
 
+/* --------------------
+   GLOBALS (UI controls are the editor for the selected layer)
+   -------------------- */
 let layerSelect, addLayerBtn, delLayerBtn, dupLayerBtn, layerColorPicker;
 let startRSlider, endRSlider;
 let polySidesStartSlider, polySidesEndSlider, startShapeSelect, endShapeSelect;
@@ -13,12 +18,12 @@ let waveMenu, dutySlider;
 let lineWStartSlider, lineWEndSlider;
 let globalRotSlider;
 let canvasScaleXSlider, canvasScaleYSlider;
-let numSpiralsSlider;
+let numSpiralsSlider; // number of turns slider (per-layer)
 
 let erosionEnabledCheckbox, erosionScaleSlider, erosionThresholdSlider, erosionDecaySlider;
 
 let uiPanel;
-let valueSpans = {};
+let valueSpans = {}; // holds the span elements used for numeric display/editing
 
 let mainCanvas;
 const SIDEBAR_WIDTH = 300;
@@ -27,15 +32,15 @@ const SIDEBAR_WIDTH = 300;
 let sh2EnabledCheckbox;
 let sh2FreqSlider, sh2AmpSlider;
 
-/* --- Circular Array controls --- */
-let circularArrayCheckbox;
+/* --- Circular Array controls (UI elements) --- */
+let circularArrayCheckbox; // per-layer checkbox element
 let arrayScaleStartSlider, arrayScaleEndSlider, radialSpreadSlider;
 
 /* --- Layers state --- */
 let layers = [];
 let selectedLayerIndex = 0;
 
-/* --- deterministic pseudo-random helper seed --- */
+/* --- deterministic pseudo-random helper seed (keeps results stable) --- */
 const PRNG_CONST = 43758.5453;
 function pseudoRandom(seed) {
   return fract(Math.sin(seed) * PRNG_CONST);
@@ -45,11 +50,11 @@ function fract(x) { return x - Math.floor(x); }
 /* ==========================================================
    HIGH-PRECISION SETTINGS
    ========================================================== */
-const LINE_STEP_T = 0.002;
-const CURVE_STEP_ANGLE = 0.002;
+const LINE_STEP_T = 0.002;      // per-line sampling for radiating lines
+const CURVE_STEP_ANGLE = 0.002; // per-angle sampling for curves
 
 /* ==========================================================
-   Layer object (includes circular-array properties)
+   Layer object (now includes circular-array properties)
    ========================================================== */
 function createDefaultLayer(name = "Layer") {
   return {
@@ -65,8 +70,8 @@ function createDefaultLayer(name = "Layer") {
     ampStart: 30,
     ampEnd: 0,
     count: 12,
-    rotOffsetDeg: 0,
-    globalRotDeg: 0,
+    rotOffsetDeg: 0,   // per-layer rotation offset used in the shape morph
+    globalRotDeg: 0,   // per-layer "global" rotation (used to rotate only that layer)
     wave: "sine",
     duty: 0.5,
     sh2Enabled: false,
@@ -78,12 +83,14 @@ function createDefaultLayer(name = "Layer") {
     erosionScale: 2.0,
     erosionThreshold: 0.5,
     erosionDecay: 0.5,
+    // Fibonacci options
     fibonacciReversed: false,
-    numSpiralTurns: 4,
+    numSpiralTurns: 4, // default number of turns for Fibonacci spiral
+    // Circular array per-layer settings
     circularArrayEnabled: false,
-    arrayScaleStart: 100,
-    arrayScaleEnd: 100,
-    radialSpread: 0
+    arrayScaleStart: 100, // percent
+    arrayScaleEnd: 100,   // percent
+    radialSpread: 0       // 0..1
   };
 }
 
@@ -98,8 +105,11 @@ function setup() {
 
   angleMode(RADIANS);
   noLoop();
+
+  // seed noise for deterministic erosion behavior
   noiseSeed(42);
 
+  // create initial layer
   layers.push(createDefaultLayer("Layer 1"));
   selectedLayerIndex = 0;
   rebuildLayerList();
@@ -128,7 +138,6 @@ function setupSidebarGUI() {
     border-right: 1px solid rgba(255,255,255,0.04);
   `);
 
-  // helper: create a standard row in the main panel
   function addRow(labelText) {
     const row = createDiv().parent(uiPanel);
     row.style("margin-bottom: 12px");
@@ -145,7 +154,7 @@ function setupSidebarGUI() {
     return { row, label, ctrlWrap, val };
   }
 
-  // helper: create a row in an arbitrary parent (e.g., collapsible content)
+  // same as addRow but places the created row into an arbitrary parent element
   function addRowTo(parentEl, labelText) {
     const row = createDiv().parent(parentEl);
     row.style("margin-bottom: 12px");
@@ -162,12 +171,10 @@ function setupSidebarGUI() {
     return { row, label, ctrlWrap, val };
   }
 
-  // collapsible section; marks header & content as full-width, and content two-col capable
+  // helper to create collapsible section
   function createCollapsible(title, initiallyOpen = true) {
     const header = createDiv().parent(uiPanel);
     header.style("display:flex; align-items:center; justify-content:space-between; cursor:pointer; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.03); margin-bottom:8px;");
-    header.addClass("full");
-
     const titleP = createP(title).parent(header);
     titleP.style("margin:0; font-size:13px; color:#ddd;");
 
@@ -176,9 +183,6 @@ function setupSidebarGUI() {
 
     const content = createDiv().parent(uiPanel);
     content.style(`margin-bottom:12px; display:${initiallyOpen ? "block" : "none"};`);
-    content.addClass("full");
-    content.addClass("section-content");
-    content.addClass("two-col"); // make internals optionally 2-col later
 
     header.mousePressed(() => {
       const isOpen = content.style("display") !== "none";
@@ -196,7 +200,6 @@ function setupSidebarGUI() {
 
   // --- Layer selector + add/delete/duplicate + color ---
   const layerRow = addRow("Layers");
-  layerRow.row.addClass("full");
   layerSelect = createSelect().parent(layerRow.ctrlWrap);
   layerSelect.style("width:100%");
   layerSelect.changed(() => {
@@ -207,11 +210,11 @@ function setupSidebarGUI() {
 
   const layerBtnRow = createDiv().parent(uiPanel);
   layerBtnRow.style("display:flex; gap:6px; margin-bottom:10px;");
-  layerBtnRow.addClass("full");
   addLayerBtn = createButton("+ Add Layer").parent(layerBtnRow);
   addLayerBtn.mousePressed(() => {
     const idx = layers.length + 1;
     const newLayer = createDefaultLayer("Layer " + idx);
+    // copy current UI into new layer so new layer starts from current settings
     updateLayerFromUI(newLayer);
     layers.push(newLayer);
     selectedLayerIndex = layers.length - 1;
@@ -252,7 +255,6 @@ function setupSidebarGUI() {
   });
 
   const colorRow = addRow("Layer Color");
-  colorRow.row.addClass("full");
   layerColorPicker = createColorPicker('#ffffff').parent(colorRow.ctrlWrap);
   layerColorPicker.input(() => {
     const l = layers[selectedLayerIndex];
@@ -262,123 +264,112 @@ function setupSidebarGUI() {
   valueSpans.layerColor = colorRow.val;
 
   /* --------------------
-     Start / End Radius (CURATED: half + half)
+     Start / End Radius
      -------------------- */
   let r1 = addRow("Start Radius");
-  r1.row.addClass("half");
   startRSlider = createSlider(10, 300, 60, 1).parent(r1.ctrlWrap);
   startRSlider.style("width:100%");
   startRSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.startR = r1.val;
 
   let r2 = addRow("End Radius");
-  r2.row.addClass("half");
   endRSlider = createSlider(10, 400, 220, 1).parent(r2.ctrlWrap);
   endRSlider.style("width:100%");
   endRSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.endR = r2.val;
 
   /* --------------------
-     Start / End Shape (full width)
+     Start / End Shape (morph targets)
      -------------------- */
   let rStartShape = addRow("Start Shape");
-  rStartShape.row.addClass("full");
   startShapeSelect = createSelect().parent(rStartShape.ctrlWrap);
   startShapeSelect.option("concentric circles");
   startShapeSelect.option("multi-sided shapes");
   startShapeSelect.option("radiating lines");
-  startShapeSelect.option("fibonacci spiral");
+  startShapeSelect.option("fibonacci spiral"); // added shape
   startShapeSelect.style("width:100%");
   startShapeSelect.changed(() => { updateRotationRangeFromShapeSelectors(); updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.startShape = rStartShape.val;
 
   let rEndShape = addRow("End Shape");
-  rEndShape.row.addClass("full");
   endShapeSelect = createSelect().parent(rEndShape.ctrlWrap);
   endShapeSelect.option("concentric circles");
   endShapeSelect.option("multi-sided shapes");
   endShapeSelect.option("radiating lines");
-  endShapeSelect.option("fibonacci spiral");
+  endShapeSelect.option("fibonacci spiral"); // added shape
   endShapeSelect.style("width:100%");
   endShapeSelect.changed(() => { updateRotationRangeFromShapeSelectors(); updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.endShape = rEndShape.val;
 
   /* --------------------
-     Polygon Sides - START / END (CURATED: half + half)
+     Polygon Sides - START / END (independent)
      -------------------- */
   let rPolyStart = addRow("Polygon Sides (Start)");
-  rPolyStart.row.addClass("half");
   polySidesStartSlider = createSlider(3, 48, 6, 1).parent(rPolyStart.ctrlWrap);
   polySidesStartSlider.style("width:100%");
   polySidesStartSlider.input(() => { updateRotationRangeFromShapeSelectors(); updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.polySidesStart = rPolyStart.val;
 
   let rPolyEnd = addRow("Polygon Sides (End)");
-  rPolyEnd.row.addClass("half");
   polySidesEndSlider = createSlider(3, 48, 6, 1).parent(rPolyEnd.ctrlWrap);
   polySidesEndSlider.style("width:100%");
   polySidesEndSlider.input(() => { updateRotationRangeFromShapeSelectors(); updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.polySidesEnd = rPolyEnd.val;
 
   /* --------------------
-     Waveform parameters (full)
+     Waveform parameters
      -------------------- */
   let rFreq = addRow("Frequency");
-  rFreq.row.addClass("full");
   freqSlider = createSlider(0, 96, 12, 1).parent(rFreq.ctrlWrap);
   freqSlider.style("width:100%");
   freqSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.freq = rFreq.val;
 
   /* --------------------
-     Amplitude Start / End (CURATED: half + half)
+     Amplitude Start / End (NEW)
      -------------------- */
   let rAmpStart = addRow("Amplitude Start");
-  rAmpStart.row.addClass("half");
   ampStartSlider = createSlider(0, 240, 80, 1).parent(rAmpStart.ctrlWrap);
   ampStartSlider.style("width:100%");
   ampStartSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.ampStart = rAmpStart.val;
 
   let rAmpEnd = addRow("Amplitude End");
-  rAmpEnd.row.addClass("half");
   ampEndSlider = createSlider(0, 240, 30, 1).parent(rAmpEnd.ctrlWrap);
   ampEndSlider.style("width:100%");
   ampEndSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.ampEnd = rAmpEnd.val;
 
   /* --------------------
-     Count + Rotation offset (full)
+     Count + Rotation offset
      -------------------- */
   let rCount = addRow("Shapes (count)");
-  rCount.row.addClass("full");
-  countSlider = createSlider(1, 120, 10, 1).parent(rCount.ctrlWrap);
+  countSlider = createSlider(1, 120, 10, 1).parent(rCount.ctrlWrap); // default 10
   countSlider.style("width:100%");
   countSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.count = rCount.val;
 
   let rRot = addRow("Rotation Offset (deg)");
-  rRot.row.addClass("full");
   rotSlider = createSlider(-30, 180, 0, 0.1).parent(rRot.ctrlWrap);
   rotSlider.style("width:100%");
   rotSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.rot = rRot.val;
 
   /* --------------------
-     GLOBAL ROTATION (full)
+     GLOBAL ROTATION (now per-layer)
      -------------------- */
   let rGR = addRow("Global Rotation (deg) — per-layer");
-  rGR.row.addClass("full");
   globalRotSlider = createSlider(-180, 180, 0, 0.1).parent(rGR.ctrlWrap);
   globalRotSlider.style("width:100%");
   globalRotSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.globalRot = rGR.val;
 
   /* --------------------
-     Fibonacci options (full)
+     Fibonacci reverse button (only shown for Fibonacci) + turns + log distribution slider
      -------------------- */
+  // reverse button row
   const fibRow = addRow("Fibonacci Options");
-  fibRow.row.addClass("full");
+  // reverse button
   const fibReverseBtn = createButton("Reverse Spiral").parent(fibRow.ctrlWrap);
   fibReverseBtn.mousePressed(() => {
     const L = layers[selectedLayerIndex];
@@ -388,26 +379,27 @@ function setupSidebarGUI() {
   });
   valueSpans.fibReverse = fibRow.val;
 
+  // number of spiral turns (per-layer)
   const spiralRow = addRow("Number of Spiral Turns");
-  spiralRow.row.addClass("full");
   numSpiralsSlider = createSlider(1, 12, 4, 1).parent(spiralRow.ctrlWrap);
   numSpiralsSlider.style("width:100%");
   numSpiralsSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.numSpirals = spiralRow.val;
 
+  // log distribution slider (positive/negative)
   const logRow = addRow("Logarithmic Distribution");
-  logRow.row.addClass("full");
+  // range -3..3 (user can type arbitrary values via the numeric input)
   var logSlider = createSlider(-3, 3, 0, 0.01).parent(logRow.ctrlWrap);
   logSlider.style("width:100%");
+  // store as a top-level so the editable code can attach
   window.logDistSlider = logSlider;
   logSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.logDist = logRow.val;
 
   /* --------------------
-     Waveform type + duty (full)
+     Waveform type + duty
      -------------------- */
   let rWave = addRow("Waveform");
-  rWave.row.addClass("full");
   waveMenu = createSelect().parent(rWave.ctrlWrap);
   waveMenu.option("sine");
   waveMenu.option("cosine");
@@ -419,30 +411,27 @@ function setupSidebarGUI() {
   valueSpans.wave = rWave.val;
 
   let rDuty = addRow("Duty Cycle (%)");
-  rDuty.row.addClass("full");
   dutySlider = createSlider(1, 99, 50, 1).parent(rDuty.ctrlWrap);
   dutySlider.style("width:100%");
   dutySlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.duty = rDuty.val;
 
   /* --------------------
-     Secondary S&H (collapsible, full)
+     Secondary S&H Modulation (collapsible)
      -------------------- */
   const shPanel = createCollapsible("Secondary Sample & Hold (S&H) — modulation", true);
+  // Put S&H controls into shPanel.content using addRowTo
   let shH = addRowTo(shPanel.content, "Secondary S&H Enabled");
-  shH.row.addClass("full");
   sh2EnabledCheckbox = createCheckbox("", false).parent(shH.ctrlWrap);
   sh2EnabledCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
   let shF = addRowTo(shPanel.content, "S&H Frequency (cycles per segment)");
-  shF.row.addClass("full");
   sh2FreqSlider = createSlider(0.1, 60, 8, 0.1).parent(shF.ctrlWrap);
   sh2FreqSlider.style("width:100%");
   sh2FreqSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
   let shA = addRowTo(shPanel.content, "S&H Amplitude (+ only)");
-  shA.row.addClass("full");
-  sh2AmpSlider = createSlider(0, 200, 20, 0.1).parent(shA.ctrlWrap);
+  sh2AmpSlider = createSlider(0, 200, 20, 0.1).parent(shA.ctrlWrap); // scale matches amp units
   sh2AmpSlider.style("width:100%");
   sh2AmpSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
@@ -450,103 +439,92 @@ function setupSidebarGUI() {
   valueSpans.sh2Amp = shA.val;
 
   /* --------------------
-     Line widths (full)
+     Line widths
      -------------------- */
   let rLW1 = addRow("Line Width Start");
-  rLW1.row.addClass("full");
   lineWStartSlider = createSlider(0.1, 100, 2, 0.1).parent(rLW1.ctrlWrap);
   lineWStartSlider.style("width:100%");
   lineWStartSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.lineWStart = rLW1.val;
 
   let rLW2 = addRow("Line Width End");
-  rLW2.row.addClass("full");
   lineWEndSlider = createSlider(0.1, 100, 2, 0.1).parent(rLW2.ctrlWrap);
   lineWEndSlider.style("width:100%");
   lineWEndSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.lineWEnd = rLW2.val;
 
   /* --------------------
-     Erosion (collapsible, full)
+     EROSION (Perlin noise) UI (collapsible)
      -------------------- */
   const erPanel = createCollapsible("Erosion (Perlin noise)", false);
+  // Put erosion controls into erPanel.content using addRowTo
   let erH = addRowTo(erPanel.content, "Enable Erosion (Perlin)");
-  erH.row.addClass("full");
   erosionEnabledCheckbox = createCheckbox("", false).parent(erH.ctrlWrap);
   erosionEnabledCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
   let erS = addRowTo(erPanel.content, "Erosion Noise Scale");
-  erS.row.addClass("full");
   erosionScaleSlider = createSlider(0.30, 10, 2.0, 0.01).parent(erS.ctrlWrap);
   erosionScaleSlider.style("width:100%");
   erosionScaleSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.erosionScale = erS.val;
 
   let erT = addRowTo(erPanel.content, "Erosion Threshold");
-  erT.row.addClass("full");
   erosionThresholdSlider = createSlider(0.36, 1, 0.5, 0.01).parent(erT.ctrlWrap);
   erosionThresholdSlider.style("width:100%");
   erosionThresholdSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.erosionThreshold = erT.val;
 
   let erD = addRowTo(erPanel.content, "Erosion Decay (center → edge)");
-  erD.row.addClass("full");
   erosionDecaySlider = createSlider(0, 1, 0.5, 0.01).parent(erD.ctrlWrap);
   erosionDecaySlider.style("width:100%");
   erosionDecaySlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.erosionDecay = erD.val;
 
   /* --------------------
-     Canvas scaling (CURATED: half + half)
+     Canvas scaling
      -------------------- */
   let rCSX = addRow("Canvas Width Scale");
-  rCSX.row.addClass("half");
   canvasScaleXSlider = createSlider(0.5, 1.5, 1.0, 0.01).parent(rCSX.ctrlWrap);
   canvasScaleXSlider.style("width:100%");
   canvasScaleXSlider.input(resizeCanvasFromSliders);
   valueSpans.canvasScaleX = rCSX.val;
 
   let rCSY = addRow("Canvas Height Scale");
-  rCSY.row.addClass("half");
   canvasScaleYSlider = createSlider(0.5, 1.5, 1.0, 0.01).parent(rCSY.ctrlWrap);
   canvasScaleYSlider.style("width:100%");
   canvasScaleYSlider.input(resizeCanvasFromSliders);
   valueSpans.canvasScaleY = rCSY.val;
 
   /* --------------------
-     Circular Array controls (mixed: full + curated pair)
+     Circular Array controls (per-layer)
      -------------------- */
   const arrRow = addRow("Circular Array Mode (per-layer)");
-  arrRow.row.addClass("full");
+  // We'll create the UI elements but their values will be synced to the selected layer
   circularArrayCheckbox = createCheckbox("Enable Circular Array", false).parent(arrRow.ctrlWrap);
   circularArrayCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
   const scaleRow = addRow("Array Scale Start (%)");
-  scaleRow.row.addClass("half");
   arrayScaleStartSlider = createSlider(1, 400, 100, 1).parent(scaleRow.ctrlWrap);
   arrayScaleStartSlider.style("width:100%");
   arrayScaleStartSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.arrayScaleStart = scaleRow.val;
 
   const scaleRow2 = addRow("Array Scale End (%)");
-  scaleRow2.row.addClass("half");
   arrayScaleEndSlider = createSlider(1, 400, 100, 1).parent(scaleRow2.ctrlWrap);
   arrayScaleEndSlider.style("width:100%");
   arrayScaleEndSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.arrayScaleEnd = scaleRow2.val;
 
   const spreadRow = addRow("Radial Spread (0 = centerLine only → 1 = start→end)");
-  spreadRow.row.addClass("full");
   radialSpreadSlider = createSlider(0, 1, 0, 0.01).parent(spreadRow.ctrlWrap);
   radialSpreadSlider.style("width:100%");
   radialSpreadSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.radialSpread = spreadRow.val;
 
   /* --------------------
-     Export & Reset (full)
+     Export & Reset
      -------------------- */
   const btnWrap = createDiv().parent(uiPanel);
-  btnWrap.addClass("full");
   btnWrap.style("margin-top:12px");
 
   const exportBtn = createButton("Export SVG").parent(btnWrap);
@@ -557,7 +535,7 @@ function setupSidebarGUI() {
     color:#fff;
     border:1px solid rgba(255,255,255,0.06);
   `);
-  exportBtn.mousePressed(() => exportSVG(true));
+  exportBtn.mousePressed(() => exportSVG(true)); // high-precision SVG export
 
   const resetBtn = createButton("Reset Defaults (selected layer)").parent(btnWrap);
   resetBtn.style(`
@@ -578,12 +556,15 @@ function setupSidebarGUI() {
 
   if (waveMenu.value() !== "square") dutySlider.hide();
 
-  // inline numeric editing
+  // After all controls created, wire up inline editing for each valueSpan
   setupInlineEditableFields();
 }
 
-/* -------------------- helpers: rebuild layer select -------------------- */
+/* --------------------
+   helpers: rebuild layer select
+   -------------------- */
 function rebuildLayerList() {
+  // clear options & re-add using option value === index
   layerSelect.elt.innerHTML = '';
   for (let i = 0; i < layers.length; i++) {
     layerSelect.option(layers[i].name, i);
@@ -593,24 +574,34 @@ function rebuildLayerList() {
 }
 
 /* --------------------
-   Attach inline numeric editing to the spans (unchanged)
+   Attach inline numeric editing to the spans.
+   - auto-select on focus (user requested option 1)
    -------------------- */
 function setupInlineEditableFields() {
+  // helper that attaches editing behavior to a span element
   function attachEditable(spanElem, sliderElem, opts = {}) {
+    // spanElem: p5.Element (span)
+    // sliderElem: p5.Element (slider) or null
+    // opts: {isInt, percent, min, max, step, onCommit}
     const isInt = opts.isInt || false;
     const percent = opts.percent || false;
 
     spanElem.mousePressed(() => {
+      // do nothing if an input is already present
       if (spanElem.elt.querySelector('input')) return;
 
+      // determine current numeric value
       let curVal;
       if (sliderElem) {
         curVal = sliderElem.value();
+        // if percent/duty slider, show as percent number 0..100
         if (percent) curVal = Math.round(sliderElem.value());
       } else {
+        // try match numeric text
         curVal = parseFloat(spanElem.html()) || 0;
       }
 
+      // clear span and add input inside it
       spanElem.elt.innerHTML = '';
       const inp = createInput(String(curVal), 'number').parent(spanElem);
       inp.elt.style.width = '78px';
@@ -620,39 +611,67 @@ function setupInlineEditableFields() {
       inp.elt.style.padding = '2px 4px';
       inp.elt.style.fontSize = '12px';
       inp.elt.style.outline = 'none';
-      setTimeout(() => { try { inp.elt.select(); } catch (e) {} }, 5);
+
+      // auto select all
+      setTimeout(() => {
+        try { inp.elt.select(); } catch (e) {}
+      }, 5);
 
       function commitAndClose() {
         let val = inp.value();
         if (val === '') val = 0;
         let num = Number(val);
         if (isNaN(num)) num = 0;
+
         if (isInt) num = Math.round(num);
 
         if (sliderElem) {
+          // clamp to slider range if slider has min/max
           const smin = Number(sliderElem.elt.min !== undefined ? sliderElem.elt.min : sliderElem.elt.getAttribute('min') || -Infinity);
           const smax = Number(sliderElem.elt.max !== undefined ? sliderElem.elt.max : sliderElem.elt.getAttribute('max') || Infinity);
+
           if (!isNaN(smin)) num = max(num, smin);
           if (!isNaN(smax)) num = min(num, smax);
+
+          // update slider with the committed value
           sliderElem.value(num);
-          if (percent) sliderElem.value(num);
+
+          // special handling for percent field mapped to duty slider (store 0..100)
+          if (percent) {
+            sliderElem.value(num);
+          }
         }
 
+        // replace input with new text
         spanElem.elt.innerHTML = String(isInt ? Math.round(num) : num);
+
+        // commit to layer & redraw
         updateLayerFromUI();
         updateLabelsAndRedraw();
 
-        try { inp.input(null); inp.changed(null); } catch (e) {}
+        // remove event handlers
+        try {
+          inp.input(null);
+          inp.changed(null);
+        } catch (e) {}
       }
 
+      // Enter commits, blur commits
       inp.elt.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter') { ev.preventDefault(); commitAndClose(); }
-        else if (ev.key === 'Escape') { spanElem.elt.innerHTML = String(curVal); }
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          commitAndClose();
+        } else if (ev.key === 'Escape') {
+          // cancel: restore original display
+          spanElem.elt.innerHTML = String(curVal);
+        }
       });
       inp.elt.addEventListener('blur', () => { commitAndClose(); });
     });
   }
 
+  // attach editables for each value span we created earlier
+  // many of these map to slider controls; pass relevant flags (isInt, percent)
   if (valueSpans.startR) attachEditable(valueSpans.startR, startRSlider);
   if (valueSpans.endR) attachEditable(valueSpans.endR, endRSlider);
   if (valueSpans.polySidesStart) attachEditable(valueSpans.polySidesStart, polySidesStartSlider, { isInt: true });
@@ -663,6 +682,7 @@ function setupInlineEditableFields() {
   if (valueSpans.count) attachEditable(valueSpans.count, countSlider, { isInt: true });
   if (valueSpans.rot) attachEditable(valueSpans.rot, rotSlider);
   if (valueSpans.globalRot) attachEditable(valueSpans.globalRot, globalRotSlider);
+  if (valueSpans.wave) { /* not numeric */ }
   if (valueSpans.duty) attachEditable(valueSpans.duty, dutySlider, { isInt: true, percent: true });
   if (valueSpans.lineWStart) attachEditable(valueSpans.lineWStart, lineWStartSlider);
   if (valueSpans.lineWEnd) attachEditable(valueSpans.lineWEnd, lineWEndSlider);
@@ -673,8 +693,16 @@ function setupInlineEditableFields() {
   if (valueSpans.erosionDecay) attachEditable(valueSpans.erosionDecay, erosionDecaySlider);
   if (valueSpans.canvasScaleX) attachEditable(valueSpans.canvasScaleX, canvasScaleXSlider);
   if (valueSpans.canvasScaleY) attachEditable(valueSpans.canvasScaleY, canvasScaleYSlider);
-  if (valueSpans.logDist && window.logDistSlider) attachEditable(valueSpans.logDist, window.logDistSlider);
-  if (valueSpans.numSpirals && numSpiralsSlider) attachEditable(valueSpans.numSpirals, numSpiralsSlider, { isInt: true });
+  if (valueSpans.layerColor) {
+    // color is not numeric but the span can be clickable to open color picker — keep default behavior
+  }
+  if (valueSpans.logDist) {
+    // log distribution slider created as window.logDistSlider
+    if (window.logDistSlider) attachEditable(valueSpans.logDist, window.logDistSlider);
+  }
+  if (valueSpans.numSpirals) {
+    if (numSpiralsSlider) attachEditable(valueSpans.numSpirals, numSpiralsSlider, { isInt: true });
+  }
   if (valueSpans.arrayScaleStart) attachEditable(valueSpans.arrayScaleStart, arrayScaleStartSlider);
   if (valueSpans.arrayScaleEnd) attachEditable(valueSpans.arrayScaleEnd, arrayScaleEndSlider);
   if (valueSpans.radialSpread) attachEditable(valueSpans.radialSpread, radialSpreadSlider);
@@ -687,6 +715,7 @@ function syncUIToLayer() {
   const l = layers[selectedLayerIndex];
   if (!l) return;
 
+  // set controls to layer values
   startRSlider.value(l.startR);
   endRSlider.value(l.endR);
   startShapeSelect.value(l.startShape);
@@ -709,12 +738,18 @@ function syncUIToLayer() {
   erosionScaleSlider.value(l.erosionScale);
   erosionThresholdSlider.value(l.erosionThreshold);
   erosionDecaySlider.value(l.erosionDecay);
+
+  // per-layer global rotation
   globalRotSlider.value(l.globalRotDeg);
+
   layerColorPicker.value(l.color);
 
+  // per-layer spiral turns and reversed
   if (numSpiralsSlider) numSpiralsSlider.value(l.numSpiralTurns);
+  // fib reverse button has no separate visual indicator; we show value in span
   if (valueSpans.fibReverse) valueSpans.fibReverse.html(l.fibonacciReversed ? "Reversed" : "");
 
+  // circular array values are now per-layer
   if (circularArrayCheckbox) circularArrayCheckbox.checked(!!l.circularArrayEnabled);
   if (arrayScaleStartSlider) arrayScaleStartSlider.value(l.arrayScaleStart);
   if (arrayScaleEndSlider) arrayScaleEndSlider.value(l.arrayScaleEnd);
@@ -725,7 +760,7 @@ function syncUIToLayer() {
 }
 
 /* --------------------
-   update a layer object from UI (unchanged)
+   update a layer object from UI controls (if layerObj omitted, updates current layer)
    -------------------- */
 function updateLayerFromUI(layerObj) {
   const l = layerObj || layers[selectedLayerIndex];
@@ -742,6 +777,7 @@ function updateLayerFromUI(layerObj) {
   l.ampEnd = Number(ampEndSlider.value());
   l.count = int(countSlider.value());
   l.rotOffsetDeg = Number(rotSlider.value());
+  // update per-layer global rotation from slider
   l.globalRotDeg = Number(globalRotSlider.value());
   l.wave = waveMenu.value();
   l.duty = Number(dutySlider.value()) / 100.0;
@@ -756,15 +792,21 @@ function updateLayerFromUI(layerObj) {
   l.erosionDecay = Number(erosionDecaySlider.value());
   l.color = layerColorPicker.value();
 
+  // store per-layer Fibonacci turns if control exists
   if (numSpiralsSlider) l.numSpiralTurns = int(numSpiralsSlider.value());
+  // fibonacciReversed toggled by button (already stored)
 
+  // circular array per-layer storage
   if (circularArrayCheckbox) l.circularArrayEnabled = circularArrayCheckbox.checked();
   if (arrayScaleStartSlider) l.arrayScaleStart = Number(arrayScaleStartSlider.value());
   if (arrayScaleEndSlider) l.arrayScaleEnd = Number(arrayScaleEndSlider.value());
   if (radialSpreadSlider) l.radialSpread = Number(radialSpreadSlider.value());
+
+  // (log distribution remains a global slider for now)
 }
 
-/* -------------------- Reset (unchanged) -------------------- */
+/* -------------------- Reset -------------------- */
+/* (keeps layering; just resets the selected layer to defaults) */
 function resetDefaults() {
   const def = createDefaultLayer(layers[selectedLayerIndex].name);
   def.color = layers[selectedLayerIndex].color;
@@ -773,17 +815,21 @@ function resetDefaults() {
   redraw();
 }
 
-/* -------------------- rotation range (unchanged) -------------------- */
+/* --------------------
+   Update rotation range based on whether either morph target is a polygon
+   (keeps rot slider sensible when polygons present)
+   -------------------- */
 function updateRotationRangeFromShapeSelectors() {
   const startIsPoly = (startShapeSelect.value() === "multi-sided shapes");
   const endIsPoly = (endShapeSelect.value() === "multi-sided shapes");
   const isPoly = startIsPoly || endIsPoly;
 
+  // choose conservative polygon side count for rotation limit (use smaller polygon)
   let nStart = int(polySidesStartSlider.value());
   let nEnd = int(polySidesEndSlider.value());
   let nForRotation = nStart;
   if (startIsPoly && endIsPoly) {
-    nForRotation = max(1, min(nStart, nEnd));
+    nForRotation = max(1, min(nStart, nEnd)); // smaller sides produce larger max rotation; be safe
   } else if (endIsPoly) {
     nForRotation = max(1, nEnd);
   } else if (startIsPoly) {
@@ -791,14 +837,18 @@ function updateRotationRangeFromShapeSelectors() {
   }
 
   setRotationRange(isPoly, nForRotation);
+  // visually indicate polygon controls when polygon present
   polySidesStartSlider.style("opacity", startIsPoly ? "1" : "0.35");
   polySidesEndSlider.style("opacity", endIsPoly ? "1" : "0.35");
 }
 
-/* -------------------- wave handler (unchanged) -------------------- */
+/* --------------------
+   Wave change handler
+   -------------------- */
 function onWaveChange() {
   if (waveMenu.value() === "square") dutySlider.show();
   else dutySlider.hide();
+
   updateLayerFromUI();
   updateLabelsAndRedraw();
 }
@@ -814,9 +864,10 @@ function setRotationRange(isPoly, n) {
 }
 
 /* ===========================
-   LABEL UPDATE + REDRAW (unchanged)
+   LABEL UPDATE + REDRAW
    =========================== */
 function updateLabelsAndRedraw() {
+  // update UI side value spans for the currently shown controls
   const l = layers[selectedLayerIndex];
 
   if (valueSpans.startR) valueSpans.startR.html(startRSlider.value());
@@ -845,15 +896,19 @@ function updateLabelsAndRedraw() {
   if (valueSpans.duty) valueSpans.duty.html(dutySlider.value() + "%");
   if (valueSpans.lineWStart) valueSpans.lineWStart.html(lineWStartSlider.value());
   if (valueSpans.lineWEnd) valueSpans.lineWEnd.html(lineWEndSlider.value());
+
   if (valueSpans.sh2Freq) valueSpans.sh2Freq.html(sh2FreqSlider.value());
   if (valueSpans.sh2Amp) valueSpans.sh2Amp.html(sh2AmpSlider.value());
+
   if (valueSpans.erosionScale) valueSpans.erosionScale.html(nf(erosionScaleSlider.value(), 1, 2));
   if (valueSpans.erosionThreshold) valueSpans.erosionThreshold.html(nf(erosionThresholdSlider.value(), 1, 2));
   if (valueSpans.erosionDecay) valueSpans.erosionDecay.html(nf(erosionDecaySlider.value(), 1, 2));
+
   if (valueSpans.startShape) valueSpans.startShape.html(startShapeSelect.value());
   if (valueSpans.endShape) valueSpans.endShape.html(endShapeSelect.value());
   if (valueSpans.polySidesStart) valueSpans.polySidesStart.html(polySidesStartSlider.value());
   if (valueSpans.polySidesEnd) valueSpans.polySidesEnd.html(polySidesEndSlider.value());
+
   if (valueSpans.layerColor) valueSpans.layerColor.html(layerColorPicker.value());
   if (valueSpans.logDist && window.logDistSlider) valueSpans.logDist.html(window.logDistSlider.value());
   if (valueSpans.numSpirals && numSpiralsSlider) valueSpans.numSpirals.html(numSpiralsSlider.value());
@@ -861,6 +916,7 @@ function updateLabelsAndRedraw() {
     const l = layers[selectedLayerIndex];
     valueSpans.fibReverse.html(l && l.fibonacciReversed ? "Reversed" : "");
   }
+
   if (valueSpans.arrayScaleStart && arrayScaleStartSlider) valueSpans.arrayScaleStart.html(arrayScaleStartSlider.value());
   if (valueSpans.arrayScaleEnd && arrayScaleEndSlider) valueSpans.arrayScaleEnd.html(arrayScaleEndSlider.value());
   if (valueSpans.radialSpread && radialSpreadSlider) valueSpans.radialSpread.html(nf(radialSpreadSlider.value(), 1, 2));
@@ -869,7 +925,7 @@ function updateLabelsAndRedraw() {
 }
 
 /* ===========================
-   RESIZE CANVAS (unchanged)
+   RESIZE CANVAS
    =========================== */
 function resizeCanvasFromSliders() {
   let sx = canvasScaleXSlider.value();
@@ -884,17 +940,20 @@ function resizeCanvasFromSliders() {
 }
 
 /* ==========================================================
-   DRAWING (unchanged drawing logic)
+   DRAWING
+   Iterate through layers and draw each using its stored params
    ========================================================== */
 function draw() {
   background(20);
 
+  // iterate layers in order and draw with per-layer rotation
   for (let li = 0; li < layers.length; li++) {
     const L = layers[li];
 
     push();
     translate(width / 2, height / 2);
-    rotate(radians(L.globalRotDeg));
+    rotate(radians(L.globalRotDeg)); // per-layer rotation
+
     stroke(L.color);
     noFill();
 
@@ -910,10 +969,14 @@ function draw() {
         L.count, li
       );
     } else if (useFibonacci) {
+      // draw Fibonacci-spired lines (curved)
       drawFibonacciLines(L, li);
     } else {
+      // Non-radiating (concentric / multi-sided / morph) mode.
+      // We must apply logarithmic distribution to how shapes are distributed radially.
       let logVal = window.logDistSlider ? Number(window.logDistSlider.value()) : 0;
 
+      // If circular array enabled for this layer, draw count instances arranged around circle
       const circularEnabled = !!L.circularArrayEnabled;
       if (circularEnabled) {
         const arrayCount = max(1, int(L.count));
@@ -923,33 +986,55 @@ function draw() {
 
         for (let j = 0; j < arrayCount; j++) {
           let t = arrayCount > 1 ? j / (arrayCount - 1) : 0;
+          // radial position between startR (center line) and endR (outer) controlled by radialSpread
+          // Interpretation: startR is center line radius, endR is outer radius ring; radialSpread scales how far along that interval instances move
           let rPos = lerp(L.startR, L.endR, radialSpread * t);
+
+          // angle evenly distributed
           let angle = j * TWO_PI / arrayCount;
+
+          // per-instance scaling
           let instScale = lerp(scaleStart, scaleEnd, t);
+
+          // morph parameter — keep 0..1 mapping across instances same as other uses:
           let mappedRadT = applyDistribution(t, logVal);
           let baseRadius = lerp(L.startR, L.endR, mappedRadT);
 
           push();
+          // move the origin to placement point (centered)
           translate(rPos * cos(angle), rPos * sin(angle));
+          // rotate each instance to face outward (auto-orient)
+          // Facing outward: rotate by angle so the "top" of the shape points away from center.
           rotate(angle + radians(L.rotOffsetDeg));
+          // scale instance
           scale(instScale);
 
+          // stroke weight must be scaled back so lines don't get too thin; set stroke weight per instance inversely to scale
           let lwActual = lerp(L.lineWStart, L.lineWEnd, t) / max(0.0001, instScale);
           strokeWeight(max(0.1, lwActual));
 
+          // draw the sampled shape centered at origin — use baseRadius as the radius param
           beginShape();
+          // Use morphT = 0 here for instances (you can adjust if you want per-instance morphing)
           drawSampledShape(baseRadius, 0, L.freq, lerp(L.ampStart, L.ampEnd, t), L.wave, L.duty, L.startShape, L.endShape, 0, L.polySidesStart, L.polySidesEnd, li);
           endShape(CLOSE);
+
           pop();
         }
       } else {
+        // original behavior — draw concentric/morphed shapes
         for (let i = 0; i < L.count; i++) {
-          let tLayer = L.count > 1 ? i / (L.count - 1) : 0;
+          let tLayer = L.count > 1 ? i / (L.count - 1) : 0; // linear t across shapes (used for morph)
+          // map tLayer with log distribution to position radius
           let mappedRadT = applyDistribution(tLayer, logVal);
           let radius = lerp(L.startR, L.endR, mappedRadT);
+
+          // morph parameter between start/end shape should remain linear (tLayer)
           let morphT = tLayer;
+
           let amp = lerp(L.ampStart, L.ampEnd, tLayer);
           let shift = i * radians(L.rotOffsetDeg);
+
           let lwActual = lerp(L.lineWStart, L.lineWEnd, tLayer);
           strokeWeight(max(0.1, lwActual));
 
@@ -965,7 +1050,9 @@ function draw() {
 }
 
 /* ==========================================================
-   applyDistribution (unchanged)
+   Apply logarithmic distribution mapping to linear t in [0,1]
+   - logParam in [-3..3] (slider range used). Positive concentrates toward 1, negative toward 0.
+   - Uses exponential mapping: out = (e^{k*t} - 1) / (e^{k} - 1), with sign handling
    ========================================================== */
 function applyDistribution(t, logParam) {
   const k = Number(logParam) || 0;
@@ -975,6 +1062,7 @@ function applyDistribution(t, logParam) {
     const den = exp(k) - 1;
     return num / max(1e-12, den);
   } else {
+    // negative k: flip and apply positive mapping, then flip back
     const kp = -k;
     const tt = 1 - t;
     const num = exp(kp * tt) - 1;
@@ -984,22 +1072,33 @@ function applyDistribution(t, logParam) {
 }
 
 /* ==========================================================
-   Fibonacci (unchanged)
+   Fibonacci curve helper:
+   Draw curved lines that follow a logarithmic spiral approximating
+   Fibonacci-like growth. numSpiralTurns controls θ range. reversed flips sign.
    ========================================================== */
 function drawFibonacciLines(L, layerIndex) {
+  // reversed toggles spiral direction (clockwise vs ccw) but keeps start angle at theta = 0
   const reversed = !!L.fibonacciReversed;
   const numTurns = max(1, int(L.numSpiralTurns || 4));
+
+  // θ range
   const thetaMax = TWO_PI * numTurns;
+  // choose b so the exponential covers reasonable change across thetaMax
   const b = 0.55 / max(1, numTurns);
+
   const count = max(1, int(L.count));
   const samples = Math.max(ceil(thetaMax / 0.02), 50);
   const du = 1.0 / samples;
 
+  // precompute exponential range to normalize re -> [0..1]
   const rExp0 = 1.0;
+  // The trick: keep the reMin/reMax chosen so reNorm increases with u for both orientations.
   const thetaStart = 0;
   const thetaEnd = thetaMax;
   const reMinForward = rExp0 * Math.exp(b * thetaStart);
   const reMaxForward = rExp0 * Math.exp(b * thetaEnd);
+  // When reversed, theta = -u*thetaMax but we still want reNorm to increase with u.
+  // So compute reMin/reMax over the same absolute theta interval, then map re computed with signed theta into [0..1].
   const reMin = reMinForward;
   const reMax = reMaxForward;
 
@@ -1010,19 +1109,27 @@ function drawFibonacciLines(L, layerIndex) {
     let prevX = null, prevY = null, prevKeep = false, prevU = 0;
 
     for (let u = 0; u <= 1.000001; u += du) {
+      // compute theta with sign for direction, but compute an absolute thetaAbs to feed exponential normalization.
       const theta = (reversed ? -1 : 1) * u * thetaMax;
-      const thetaAbs = u * thetaMax;
+      const thetaAbs = u * thetaMax; // always positive increasing with u
 
+      // exponential spiral re = r0 * e^{b*thetaAbs} (use abs to ensure mapping monotonic in u)
       const re = rExp0 * Math.exp(b * thetaAbs);
-      const reNorm = (re - reMin) / max(1e-12, (reMax - reMin));
+      const reNorm = (re - reMin) / max(1e-12, (reMax - reMin)); // in [0..1]
+
+      // apply log distribution slider to push origins along diameter as requested
       const mapped = applyDistribution(reNorm, logVal);
+
+      // map along radii
       const r = lerp(L.startR, L.endR, mapped);
 
+      // wave + secondary S&H offset applied tangentially similar to radiating-lines
       const phase = u * L.freq * TWO_PI;
       const primary = waveformFunc(L.wave, phase, L.duty);
       const sec = secondarySH_by_t(u, L);
       const offset = primary * lerp(L.ampStart, L.ampEnd, u) + sec;
 
+      // Note: angleAtPoint uses signed theta to rotate clockwise vs ccw
       const angleAtPoint = baseAngle + theta;
       const tangent = angleAtPoint + HALF_PI;
 
@@ -1045,6 +1152,9 @@ function drawFibonacciLines(L, layerIndex) {
   }
 }
 
+/* ==========================================================
+   Draw fibonacci spirals into an SVG graphics context for export
+   ========================================================== */
 function drawFibonacciLinesSVG(g, L, layerIndex = 0) {
   const reversed = !!L.fibonacciReversed;
   const numTurns = max(1, int(L.numSpiralTurns || 4));
@@ -1105,47 +1215,61 @@ function drawFibonacciLinesSVG(g, L, layerIndex = 0) {
 }
 
 /* ==========================================================
-   S&H + waveform (unchanged)
+   SECONDARY SAMPLE & HOLD (deterministic) — now per-layer
    ========================================================== */
 function secondarySH_by_t(t, layerObj) {
   if (!layerObj || !layerObj.sh2Enabled) return 0;
+  // t in [0..1]
   let freq = layerObj.sh2Freq;
   let idx = Math.floor(t * freq);
   let val = pseudoRandom(idx + 1.2345);
   return val * layerObj.sh2Amp;
 }
 
+/* ==========================================================
+   PRIMARY SAMPLE & HOLD (deterministic)
+   ========================================================== */
 function primarySH_byPhase(phaseRad) {
   let idx = Math.floor(phaseRad / TWO_PI);
   let v = pseudoRandom(idx + 0.4321) * 2.0 - 1.0;
   return v;
 }
 
+/* ==========================================================
+   WAVEFORM FUNCTION (includes deterministic Sample & Hold)
+   ========================================================== */
 function waveformFunc(type, phaseRad, duty = 0.5) {
   if (type === "sine") return sin(phaseRad);
   if (type === "cosine") return cos(phaseRad);
   if (type === "triangle") return (2 / PI) * asin(sin(phaseRad));
+
   if (type === "square") {
     let f = ((phaseRad % TWO_PI) + TWO_PI) % TWO_PI;
     f /= TWO_PI;
     return f < duty ? 1 : -1;
   }
-  if (type === "sample & hold") return primarySH_byPhase(phaseRad);
+
+  if (type === "sample & hold") {
+    return primarySH_byPhase(phaseRad);
+  }
+
   return 0;
 }
 
 /* ==========================================================
-   Erosion (unchanged)
+   Helper: erosion test at world coordinates (x,y) with per-line offset
+   Erosion decay modifies threshold with normalized radius from center (0..1).
+   The lineIndex param is passed to decorrelate noise per layer/line.
    ========================================================== */
 function erosionTestAtXY(x, y, lineIndex = 0) {
   const layerToUse = layers[Math.min(lineIndex, layers.length - 1)] || layers[0];
-  if (!layerToUse.erosionEnabled) return true;
+  if (!layerToUse.erosionEnabled) return true; // keep by default
 
   const scale = layerToUse.erosionScale;
   const baseThresh = layerToUse.erosionThreshold;
   const decay = layerToUse.erosionDecay;
 
-  const lineOffset = lineIndex * 103.764;
+  const lineOffset = lineIndex * 103.764; // arbitrary spacing
   let n = noise((x + lineOffset) * scale, (y + lineOffset) * scale);
 
   let maxR = max(1,
@@ -1154,14 +1278,18 @@ function erosionTestAtXY(x, y, lineIndex = 0) {
   let rNorm = constrain(rMag / maxR, 0, 1);
 
   let finalThresh = lerp(baseThresh, 1.0, decay * rNorm);
-  return n >= finalThresh;
+
+  return n >= finalThresh; // true => keep; false => erase/break
 }
 
 /* ==========================================================
-   Base sampling + morph (unchanged)
+   SAMPLE BASE RADIUS FOR A GIVEN SHAPE TYPE AT ANGLE a
+   (unchanged from baseline)
    ========================================================== */
 function sampleBaseRadius(shapeType, radiusParam, sidesN, angle, layerCountForSpikes = 60) {
-  if (shapeType === "concentric circles") return radiusParam;
+  if (shapeType === "concentric circles") {
+    return radiusParam;
+  }
 
   if (shapeType === "multi-sided shapes") {
     let half = PI / max(1, sidesN);
@@ -1187,12 +1315,17 @@ function sampleBaseRadius(shapeType, radiusParam, sidesN, angle, layerCountForSp
   }
 
   if (shapeType === "fibonacci spiral") {
+    // When morphing, treat as circular baseline; the real spiral drawing uses its own routine.
     return radiusParam;
   }
 
   return radiusParam;
 }
 
+/* ==========================================================
+   DRAW SAMPLED SHAPE: morph between startShapeType and endShapeType
+   (added 'layerIndex' param for erosion & S&H lookup)
+   ========================================================== */
 function drawSampledShape(radius, shift, f, amp, wave, duty, startShapeType, endShapeType, tMorph, sidesStart, sidesEnd, layerIndex = 0) {
   let keepSegment = false;
   const L = layers[layerIndex] || layers[0];
@@ -1208,6 +1341,7 @@ function drawSampledShape(radius, shift, f, amp, wave, duty, startShapeType, end
     let sec = secondarySH_by_t(tAng, L);
 
     let r = baseR + (mod * amp) + sec;
+
     let x = r * cos(a + shift);
     let y = r * sin(a + shift);
 
@@ -1232,6 +1366,11 @@ function drawSampledShape(radius, shift, f, amp, wave, duty, startShapeType, end
   if (keepSegment) endShape();
 }
 
+/* ==========================================================
+   RADIATING LINES (open) - supports per-layer morph sampling
+   ==========================================================
+   NOTE: log distribution now applied to t across the line when requested.
+   ========================================================== */
 function drawRadialLines(startR, endR, globalShiftRad, f, ampStart, ampEnd, wave, duty, lwStart, lwEnd, startShapeType, endShapeType, sidesStart, sidesEnd, count, layerIndex = 0) {
   let stepT = LINE_STEP_T;
   let stepAngle = TWO_PI / max(1, count);
@@ -1241,6 +1380,7 @@ function drawRadialLines(startR, endR, globalShiftRad, f, ampStart, ampEnd, wave
 
   for (let i = 0; i < count; i++) {
     let baseAngle = i * stepAngle + globalShiftRad;
+    let lineIndex = i; // used for erosion decorrelation
 
     let prevX = null;
     let prevY = null;
@@ -1250,6 +1390,7 @@ function drawRadialLines(startR, endR, globalShiftRad, f, ampStart, ampEnd, wave
     for (let t = 0; t <= 1.000001; t += stepT) {
       let amp = lerp(ampStart, ampEnd, t);
 
+      // apply log distribution to radial param t
       let mapped = applyDistribution(t, logVal);
       let r = lerp(startR, endR, mapped);
 
@@ -1288,7 +1429,7 @@ function drawRadialLines(startR, endR, globalShiftRad, f, ampStart, ampEnd, wave
 }
 
 /* ==========================================================
-   SVG export (unchanged)
+   SVG: export all layers (preserves colors & stacking order)
    ========================================================== */
 function exportSVG(isHighPrecision = false) {
   if (typeof SVG === "undefined") return saveCanvas("pattern", "png");
@@ -1323,6 +1464,7 @@ function exportSVG(isHighPrecision = false) {
     } else if (useFibonacci) {
       drawFibonacciLinesSVG(svg, L, li);
     } else {
+      // For SVG export: if circular array enabled for this layer, render the same array copies into SVG
       const circularEnabled = !!L.circularArrayEnabled;
       let logVal = window.logDistSlider ? Number(window.logDistSlider.value()) : 0;
 
@@ -1380,6 +1522,10 @@ function exportSVG(isHighPrecision = false) {
   save(svg, "pattern.svg");
 }
 
+/* ==========================================================
+   SVG helpers: sampled morphing equivalent to drawSampledShape()
+   (accepts layerIndex for erosion & S&H)
+   ========================================================== */
 function drawSampledShapeSVG(g, radius, shift, f, amp, wave, duty, startShapeType, endShapeType, tMorph, sidesStart, sidesEnd, layerIndex = 0) {
   let keepSegment = false;
   const L = layers[layerIndex] || layers[0];
@@ -1410,6 +1556,9 @@ function drawSampledShapeSVG(g, radius, shift, f, amp, wave, duty, startShapeTyp
   if (keepSegment) g.endShape();
 }
 
+/* ==========================================================
+   SVG: Radiating lines (approx matches canvas drawRadialLines)
+   ========================================================== */
 function drawRadialLinesSVG(g, startR, endR, shift, f, ampStart, ampEnd, wave, duty, lwStart, lwEnd, startShapeType, endShapeType, sidesStart, sidesEnd, count, layerIndex = 0) {
   let stepT = LINE_STEP_T;
   let stepAngle = TWO_PI / max(1, count);
@@ -1427,6 +1576,7 @@ function drawRadialLinesSVG(g, startR, endR, shift, f, ampStart, ampEnd, wave, d
     for (let t = 0; t <= 1.000001; t += stepT) {
       let amp = lerp(ampStart, ampEnd, t);
 
+      // apply log distribution for SVG radiating lines too
       let mapped = applyDistribution(t, logVal);
       let r = lerp(startR, endR, mapped);
 
