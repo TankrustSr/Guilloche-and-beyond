@@ -3,8 +3,7 @@
    - Log distribution affects radial placement for circles, radiating lines, and Fibonacci spirals
    - Fibonacci reverse properly reverses direction while keeping same start point
    - numSpiralTurns per-layer slider + SVG export
-   - NEW: Per-layer Circular Array mode — distribute centered shapes around a ring with per-instance scaling and radial spread
-     * Auto-orient option (facing outward) implemented
+   - NEW: Circular Array mode — distribute centered shapes around a ring with per-instance scaling and radial spread
 */
 
 /* --------------------
@@ -32,9 +31,8 @@ const SIDEBAR_WIDTH = 300;
 let sh2EnabledCheckbox;
 let sh2FreqSlider, sh2AmpSlider;
 
-/* --- Circular Array controls (UI elements) --- */
-let circularArrayCheckbox; // per-layer checkbox element
-let arrayScaleStartSlider, arrayScaleEndSlider, radialSpreadSlider;
+/* --- Circular Array controls --- */
+let circularArrayCheckbox, arrayScaleStartSlider, arrayScaleEndSlider, radialSpreadSlider;
 
 /* --- Layers state --- */
 let layers = [];
@@ -54,7 +52,7 @@ const LINE_STEP_T = 0.002;      // per-line sampling for radiating lines
 const CURVE_STEP_ANGLE = 0.002; // per-angle sampling for curves
 
 /* ==========================================================
-   Layer object (now includes circular-array properties)
+   Layer object
    ========================================================== */
 function createDefaultLayer(name = "Layer") {
   return {
@@ -85,12 +83,7 @@ function createDefaultLayer(name = "Layer") {
     erosionDecay: 0.5,
     // Fibonacci options
     fibonacciReversed: false,
-    numSpiralTurns: 4, // default number of turns for Fibonacci spiral
-    // Circular array per-layer settings
-    circularArrayEnabled: false,
-    arrayScaleStart: 100, // percent
-    arrayScaleEnd: 100,   // percent
-    radialSpread: 0       // 0..1
+    numSpiralTurns: 4 // default number of turns for Fibonacci spiral
   };
 }
 
@@ -119,15 +112,11 @@ function setup() {
   onWaveChange();
   updateLabelsAndRedraw();
 }
-/* ==========================================================
-   SIDEBAR GUI — merged with collapsible sections (updated)
-   ========================================================== */
-function setupSidebarGUI() {
-  // remove any existing panel if re-running in live edit
-  if (uiPanel && uiPanel.elt) {
-    try { uiPanel.remove(); } catch (e) {}
-  }
 
+/* ===========================
+   SIDEBAR GUI
+   =========================== */
+function setupSidebarGUI() {
   uiPanel = createDiv();
   uiPanel.id("ui-panel");
   uiPanel.style(`
@@ -138,64 +127,46 @@ function setupSidebarGUI() {
     height: 100vh;
     background: #111;
     color: #fff;
-    padding: 12px;
+    padding: 14px;
     overflow-y: auto;
     box-sizing: border-box;
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 13px;
     border-right: 1px solid rgba(255,255,255,0.04);
   `);
 
-  function sectionTitle(text) {
-    const d = createDiv(text).parent(uiPanel);
-    d.style("font-weight:700; margin-top:6px; color:#e6f1ff;");
-    return d;
+  function addRow(labelText) {
+    const row = createDiv().parent(uiPanel);
+    row.style("margin-bottom: 12px");
+
+    const label = createP(labelText).parent(row);
+    label.style("margin:0 0 6px 0; font-size:13px; color:#ddd;");
+
+    const val = createSpan("").parent(row);
+    val.style("float:right; color:#9bd; font-weight:600; cursor:pointer;");
+
+    const ctrlWrap = createDiv().parent(row);
+    ctrlWrap.style("margin-top:6px;");
+
+    return { row, label, ctrlWrap, val };
   }
 
-  /* -----------------------------------------------
-     Helper: collapsible section generator
-     returns content container (p5.Element)
-     ----------------------------------------------- */
-  function createCollapsible(parent, titleText, initiallyOpen = false) {
-    const wrap = createDiv().parent(parent).style("margin-top","8px");
-    const header = createDiv(titleText)
-      .parent(wrap)
-      .style("font-weight","700")
-      .style("cursor","pointer")
-      .style("padding","6px 0")
-      .style("color","#d8eaff");
-
-    const content = createDiv()
-      .parent(wrap)
-      .style("margin-left","6px");
-
-    content.style("display", initiallyOpen ? "block" : "none");
-
-    header.mousePressed(() => {
-      let cur = content.style("display");
-      content.style("display", cur === "none" ? "block" : "none");
-    });
-
-    return content;
-  }
-
-  /* ==========================================================
-     LAYERS
-     ========================================================== */
-  sectionTitle("Layers");
-  layerSelect = createSelect().parent(uiPanel).style("width:100%; margin-bottom:6px;");
+  // --- Layer selector + add/delete/duplicate + color ---
+  const layerRow = addRow("Layers");
+  layerSelect = createSelect().parent(layerRow.ctrlWrap);
+  layerSelect.style("width:100%");
   layerSelect.changed(() => {
     const v = layerSelect.value();
     selectedLayerIndex = Math.max(0, Math.min(layers.length - 1, int(v)));
     syncUIToLayer();
   });
 
-  const layerBtnRow = createDiv().parent(uiPanel).style("display:flex; gap:6px; margin-bottom:10px;");
-  addLayerBtn = createButton("+ Add").parent(layerBtnRow);
+  const layerBtnRow = createDiv().parent(uiPanel);
+  layerBtnRow.style("display:flex; gap:6px; margin-bottom:10px;");
+  addLayerBtn = createButton("+ Add Layer").parent(layerBtnRow);
   addLayerBtn.mousePressed(() => {
-    // create layer using defaults but copy current UI values into it
-    const newLayer = createDefaultLayer("Layer " + (layers.length + 1));
-    updateLayerFromUI(newLayer); // copy current live UI into created layer
+    const idx = layers.length + 1;
+    const newLayer = createDefaultLayer("Layer " + idx);
+    updateLayerFromUI(newLayer); // copy current UI into new layer
     layers.push(newLayer);
     selectedLayerIndex = layers.length - 1;
     rebuildLayerList();
@@ -203,12 +174,20 @@ function setupSidebarGUI() {
     redraw();
   });
 
-  dupLayerBtn = createButton("Duplicate").parent(layerBtnRow);
+  dupLayerBtn = createButton("Duplicate Layer").parent(layerBtnRow);
   dupLayerBtn.mousePressed(() => {
     const src = layers[selectedLayerIndex];
     if (!src) return;
     const clone = JSON.parse(JSON.stringify(src));
-    clone.name = (src.name || "Layer") + " copy";
+    let base = src.name || "Layer";
+    let suffix = " copy";
+    let newName = base + suffix;
+    let i = 2;
+    while (layers.some(l => l.name === newName)) {
+      newName = base + " copy " + i;
+      i++;
+    }
+    clone.name = newName;
     layers.push(clone);
     selectedLayerIndex = layers.length - 1;
     rebuildLayerList();
@@ -216,7 +195,7 @@ function setupSidebarGUI() {
     redraw();
   });
 
-  delLayerBtn = createButton("- Delete").parent(layerBtnRow);
+  delLayerBtn = createButton("Delete Layer").parent(layerBtnRow);
   delLayerBtn.mousePressed(() => {
     if (layers.length <= 1) return;
     layers.splice(selectedLayerIndex, 1);
@@ -226,210 +205,307 @@ function setupSidebarGUI() {
     redraw();
   });
 
-  createDiv("<hr>").parent(uiPanel);
+  const colorRow = addRow("Layer Color");
+  layerColorPicker = createColorPicker('#ffffff').parent(colorRow.ctrlWrap);
+  layerColorPicker.input(() => {
+    const l = layers[selectedLayerIndex];
+    l.color = layerColorPicker.value();
+    redraw();
+  });
+  valueSpans.layerColor = colorRow.val;
 
-  /* ==========================================================
-     MAIN SHAPE CONTROLS
-     ========================================================== */
-  sectionTitle("Shape / Morph");
+  /* --------------------
+     Start / End Radius
+     -------------------- */
+  let r1 = addRow("Start Radius");
+  startRSlider = createSlider(10, 300, 60, 1).parent(r1.ctrlWrap);
+  startRSlider.style("width:100%");
+  startRSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.startR = r1.val;
 
-  createDiv("Start Shape").parent(uiPanel);
-  startShapeSelect = createSelect().parent(uiPanel).style("width:100%");
+  let r2 = addRow("End Radius");
+  endRSlider = createSlider(10, 400, 220, 1).parent(r2.ctrlWrap);
+  endRSlider.style("width:100%");
+  endRSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.endR = r2.val;
+
+  /* --------------------
+     Start / End Shape (morph targets)
+     -------------------- */
+  let rStartShape = addRow("Start Shape");
+  startShapeSelect = createSelect().parent(rStartShape.ctrlWrap);
   startShapeSelect.option("concentric circles");
   startShapeSelect.option("multi-sided shapes");
   startShapeSelect.option("radiating lines");
-  startShapeSelect.option("fibonacci spiral");
+  startShapeSelect.option("fibonacci spiral"); // added shape
+  startShapeSelect.style("width:100%");
   startShapeSelect.changed(() => { updateRotationRangeFromShapeSelectors(); updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.startShape = rStartShape.val;
 
-  createDiv("End Shape").parent(uiPanel);
-  endShapeSelect = createSelect().parent(uiPanel).style("width:100%");
+  let rEndShape = addRow("End Shape");
+  endShapeSelect = createSelect().parent(rEndShape.ctrlWrap);
   endShapeSelect.option("concentric circles");
   endShapeSelect.option("multi-sided shapes");
   endShapeSelect.option("radiating lines");
-  endShapeSelect.option("fibonacci spiral");
+  endShapeSelect.option("fibonacci spiral"); // added shape
+  endShapeSelect.style("width:100%");
   endShapeSelect.changed(() => { updateRotationRangeFromShapeSelectors(); updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.endShape = rEndShape.val;
 
-  createDiv("Shapes (count)").parent(uiPanel);
-  countSlider = createSlider(1, 200, 12, 1).parent(uiPanel).style("width","100%");
-  countSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  createDiv("Start Radius").parent(uiPanel);
-  startRSlider = createSlider(1, 2000, 60, 1).parent(uiPanel).style("width","100%");
-  startRSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  createDiv("End Radius").parent(uiPanel);
-  endRSlider = createSlider(1, 2000, 220, 1).parent(uiPanel).style("width","100%");
-  endRSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  createDiv("Rotation Offset (deg)").parent(uiPanel);
-  rotSlider = createSlider(-360, 360, 0, 0.1).parent(uiPanel).style("width","100%");
-  rotSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  createDiv("Global Rotation (deg)").parent(uiPanel);
-  globalRotSlider = createSlider(-180, 180, 0, 0.1).parent(uiPanel).style("width","100%");
-  globalRotSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  createDiv("Frequency").parent(uiPanel);
-  freqSlider = createSlider(0, 96, 12, 1).parent(uiPanel).style("width","100%");
-  freqSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  createDiv("Amplitude Start").parent(uiPanel);
-  ampStartSlider = createSlider(0, 240, 30, 1).parent(uiPanel).style("width","100%");
-  ampStartSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  createDiv("Amplitude End").parent(uiPanel);
-  ampEndSlider = createSlider(0, 240, 0, 1).parent(uiPanel).style("width","100%");
-  ampEndSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  createDiv("Line Width Start").parent(uiPanel);
-  lineWStartSlider = createSlider(0.1, 100, 2, 0.1).parent(uiPanel).style("width","100%");
-  lineWStartSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  createDiv("Line Width End").parent(uiPanel);
-  lineWEndSlider = createSlider(0.1, 100, 2, 0.1).parent(uiPanel).style("width","100%");
-  lineWEndSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  createDiv("Polygon Sides (Start)").parent(uiPanel);
-  polySidesStartSlider = createSlider(3, 48, 6, 1).parent(uiPanel).style("width","100%");
+  /* --------------------
+     Polygon Sides - START / END (independent)
+     -------------------- */
+  let rPolyStart = addRow("Polygon Sides (Start)");
+  polySidesStartSlider = createSlider(3, 48, 6, 1).parent(rPolyStart.ctrlWrap);
+  polySidesStartSlider.style("width:100%");
   polySidesStartSlider.input(() => { updateRotationRangeFromShapeSelectors(); updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.polySidesStart = rPolyStart.val;
 
-  createDiv("Polygon Sides (End)").parent(uiPanel);
-  polySidesEndSlider = createSlider(3, 48, 6, 1).parent(uiPanel).style("width","100%");
+  let rPolyEnd = addRow("Polygon Sides (End)");
+  polySidesEndSlider = createSlider(3, 48, 6, 1).parent(rPolyEnd.ctrlWrap);
+  polySidesEndSlider.style("width:100%");
   polySidesEndSlider.input(() => { updateRotationRangeFromShapeSelectors(); updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.polySidesEnd = rPolyEnd.val;
 
-  // Fibonacci controls
-  createDiv("Number of Spiral Turns").parent(uiPanel);
-  numSpiralsSlider = createSlider(1, 12, 4, 1).parent(uiPanel).style("width","100%");
-  numSpiralsSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  /* --------------------
+     Waveform parameters
+     -------------------- */
+  let rFreq = addRow("Frequency");
+  freqSlider = createSlider(0, 96, 12, 1).parent(rFreq.ctrlWrap);
+  freqSlider.style("width:100%");
+  freqSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.freq = rFreq.val;
 
-  const fibRow = createDiv().parent(uiPanel).style("display:flex; gap:8px; align-items:center;");
-  fibReverseBtn = createButton("Reverse Spiral").parent(fibRow);
+  /* --------------------
+     Amplitude Start / End (NEW)
+     -------------------- */
+  let rAmpStart = addRow("Amplitude Start");
+  ampStartSlider = createSlider(0, 240, 80, 1).parent(rAmpStart.ctrlWrap);
+  ampStartSlider.style("width:100%");
+  ampStartSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.ampStart = rAmpStart.val;
+
+  let rAmpEnd = addRow("Amplitude End");
+  ampEndSlider = createSlider(0, 240, 30, 1).parent(rAmpEnd.ctrlWrap);
+  ampEndSlider.style("width:100%");
+  ampEndSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.ampEnd = rAmpEnd.val;
+
+  /* --------------------
+     Count + Rotation offset
+     -------------------- */
+  let rCount = addRow("Shapes (count)");
+  countSlider = createSlider(1, 120, 10, 1).parent(rCount.ctrlWrap); // default 10
+  countSlider.style("width:100%");
+  countSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.count = rCount.val;
+
+  let rRot = addRow("Rotation Offset (deg)");
+  rotSlider = createSlider(-30, 180, 0, 0.1).parent(rRot.ctrlWrap);
+  rotSlider.style("width:100%");
+  rotSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.rot = rRot.val;
+
+  /* --------------------
+     GLOBAL ROTATION (now per-layer)
+     -------------------- */
+  let rGR = addRow("Global Rotation (deg) — per-layer");
+  globalRotSlider = createSlider(-180, 180, 0, 0.1).parent(rGR.ctrlWrap);
+  globalRotSlider.style("width:100%");
+  globalRotSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.globalRot = rGR.val;
+
+  /* --------------------
+     Fibonacci reverse button (only shown for Fibonacci) + turns + log distribution slider
+     -------------------- */
+  // reverse button row
+  const fibRow = addRow("Fibonacci Options");
+  // reverse button
+  const fibReverseBtn = createButton("Reverse Spiral").parent(fibRow.ctrlWrap);
   fibReverseBtn.mousePressed(() => {
     const L = layers[selectedLayerIndex];
-    if (!L) return;
     L.fibonacciReversed = !L.fibonacciReversed;
     syncUIToLayer();
     redraw();
   });
+  valueSpans.fibReverse = fibRow.val;
 
-  createDiv("Logarithmic Distribution").parent(uiPanel);
-  // expose the same global slider object your rest of code expects
-  window.logDistSlider = createSlider(-3, 3, 0, 0.01).parent(uiPanel).style("width","100%");
-  logDistSlider.input(() => { updateLabelsAndRedraw(); });
+  // number of spiral turns (per-layer)
+  const spiralRow = addRow("Number of Spiral Turns");
+  numSpiralsSlider = createSlider(1, 12, 4, 1).parent(spiralRow.ctrlWrap);
+  numSpiralsSlider.style("width:100%");
+  numSpiralsSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.numSpirals = spiralRow.val;
 
-  createDiv("<hr>").parent(uiPanel);
+  // log distribution slider (positive/negative)
+  const logRow = addRow("Logarithmic Distribution");
+  // range -3..3 (user can type arbitrary values via the numeric input)
+  var logSlider = createSlider(-3, 3, 0, 0.01).parent(logRow.ctrlWrap);
+  logSlider.style("width:100%");
+  // store as a top-level so the editable code can attach
+  window.logDistSlider = logSlider;
+  logSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.logDist = logRow.val;
 
-  /* ==========================================================
-     CANVAS SIZE & SCALE — COLLAPSIBLE (per your request)
-     ========================================================== */
-  const canvasSec = createCollapsible(uiPanel, "Canvas Size & Scale", false);
+  /* --------------------
+     Waveform type + duty
+     -------------------- */
+  let rWave = addRow("Waveform");
+  waveMenu = createSelect().parent(rWave.ctrlWrap);
+  waveMenu.option("sine");
+  waveMenu.option("cosine");
+  waveMenu.option("square");
+  waveMenu.option("triangle");
+  waveMenu.option("sample & hold");
+  waveMenu.changed(() => { onWaveChange(); updateLayerFromUI(); });
+  waveMenu.style("width:100%");
+  valueSpans.wave = rWave.val;
 
-  createDiv("Canvas Width (px)").parent(canvasSec);
-  // show current canvas width in input; keep as informational editable
-  window.canvasWInput = createInput(width.toString()).parent(canvasSec).style("width","100%");
-  createDiv("Canvas Height (px)").parent(canvasSec);
-  window.canvasHInput = createInput(height.toString()).parent(canvasSec).style("width","100%");
+  let rDuty = addRow("Duty Cycle (%)");
+  dutySlider = createSlider(1, 99, 50, 1).parent(rDuty.ctrlWrap);
+  dutySlider.style("width:100%");
+  dutySlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.duty = rDuty.val;
 
-  createDiv("Canvas Width Scale (mult)").parent(canvasSec);
-  canvasScaleXSlider = createSlider(0.5, 1.5, 1.0, 0.01).parent(canvasSec).style("width","100%");
-  canvasScaleXSlider.input(resizeCanvasFromSliders);
-
-  createDiv("Canvas Height Scale (mult)").parent(canvasSec);
-  canvasScaleYSlider = createSlider(0.5, 1.5, 1.0, 0.01).parent(canvasSec).style("width","100%");
-  canvasScaleYSlider.input(resizeCanvasFromSliders);
-
-  createButton("Apply Resize").parent(canvasSec).mousePressed(resizeCanvasFromSliders);
-
-  createDiv("<hr>").parent(uiPanel);
-
-  /* ==========================================================
-     CIRCULAR ARRAY — COLLAPSIBLE, PER-LAYER
-     ========================================================== */
-  const circSec = createCollapsible(uiPanel, "Circular Array (per-layer)", false);
-
-  // enable per-layer circular array
-  circularArrayCheckbox = createCheckbox("Enable Circular Array", false).parent(circSec);
-  circularArrayCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  // Use the layer count slider as the array count (keeps semantics consistent)
-  createDiv("Array Count (uses Shapes count)").parent(circSec);
-  const hint = createDiv("Uses the 'Shapes (count)' value above").parent(circSec).style("font-size:11px;color:#9bd; margin-bottom:6px;");
-
-  createDiv("Array Scale Start (%)").parent(circSec);
-  arrayScaleStartSlider = createSlider(1, 400, 100, 1).parent(circSec).style("width","100%");
-  arrayScaleStartSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  createDiv("Array Scale End (%)").parent(circSec);
-  arrayScaleEndSlider = createSlider(1, 400, 100, 1).parent(circSec).style("width","100%");
-  arrayScaleEndSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  createDiv("Radial Spread (0..1)").parent(circSec);
-  radialSpreadSlider = createSlider(0, 1, 0, 0.01).parent(circSec).style("width","100%");
-  radialSpreadSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  createDiv("<hr>").parent(uiPanel);
-
-  /* ==========================================================
-     SAMPLE & HOLD — COLLAPSIBLE
-     ========================================================== */
-  const shSec = createCollapsible(uiPanel, "Secondary Sample & Hold", false);
-
-  sh2EnabledCheckbox = createCheckbox("Enable S&H (secondary)", false).parent(shSec);
+  /* --------------------
+     Secondary S&H Modulation
+     -------------------- */
+  let shH = addRow("Secondary S&H Enabled");
+  sh2EnabledCheckbox = createCheckbox("", false).parent(shH.ctrlWrap);
   sh2EnabledCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
-  createDiv("S&H Frequency (cycles per segment)").parent(shSec);
-  sh2FreqSlider = createSlider(0.1, 60, 8, 0.1).parent(shSec).style("width","100%");
+  let shF = addRow("S&H Frequency (cycles per segment)");
+  sh2FreqSlider = createSlider(0.1, 60, 8, 0.1).parent(shF.ctrlWrap);
+  sh2FreqSlider.style("width:100%");
   sh2FreqSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
-  createDiv("S&H Amplitude").parent(shSec);
-  sh2AmpSlider = createSlider(0, 200, 20, 0.1).parent(shSec).style("width","100%");
+  let shA = addRow("S&H Amplitude (+ only)");
+  sh2AmpSlider = createSlider(0, 200, 20, 0.1).parent(shA.ctrlWrap); // scale matches amp units
+  sh2AmpSlider.style("width:100%");
   sh2AmpSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
-  createDiv("<hr>").parent(uiPanel);
+  valueSpans.sh2Freq = shF.val;
+  valueSpans.sh2Amp = shA.val;
 
-  /* ==========================================================
-     EROSION — COLLAPSIBLE
-     ========================================================== */
-  const erSec = createCollapsible(uiPanel, "Erosion (Perlin)", false);
+  /* --------------------
+     Line widths
+     -------------------- */
+  let rLW1 = addRow("Line Width Start");
+  lineWStartSlider = createSlider(0.1, 100, 2, 0.1).parent(rLW1.ctrlWrap);
+  lineWStartSlider.style("width:100%");
+  lineWStartSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.lineWStart = rLW1.val;
 
-  erosionEnabledCheckbox = createCheckbox("Enable Erosion", false).parent(erSec);
+  let rLW2 = addRow("Line Width End");
+  lineWEndSlider = createSlider(0.1, 100, 2, 0.1).parent(rLW2.ctrlWrap);
+  lineWEndSlider.style("width:100%");
+  lineWEndSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.lineWEnd = rLW2.val;
+
+  /* --------------------
+     EROSION (Perlin noise) UI
+     -------------------- */
+  let erH = addRow("Enable Erosion (Perlin)");
+  erosionEnabledCheckbox = createCheckbox("", false).parent(erH.ctrlWrap);
   erosionEnabledCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
-  createDiv("Erosion Noise Scale").parent(erSec);
-  erosionScaleSlider = createSlider(0.3, 10, 2.0, 0.01).parent(erSec).style("width","100%");
+  let erS = addRow("Erosion Noise Scale");
+  erosionScaleSlider = createSlider(0.30, 10, 2.0, 0.01).parent(erS.ctrlWrap);
+  erosionScaleSlider.style("width:100%");
   erosionScaleSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.erosionScale = erS.val;
 
-  createDiv("Erosion Threshold").parent(erSec);
-  erosionThresholdSlider = createSlider(0.36, 1, 0.5, 0.01).parent(erSec).style("width","100%");
+  let erT = addRow("Erosion Threshold");
+  erosionThresholdSlider = createSlider(0.36, 1, 0.5, 0.01).parent(erT.ctrlWrap);
+  erosionThresholdSlider.style("width:100%");
   erosionThresholdSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.erosionThreshold = erT.val;
 
-  createDiv("Erosion Decay").parent(erSec);
-  erosionDecaySlider = createSlider(0, 1, 0.5, 0.01).parent(erSec).style("width","100%");
+  let erD = addRow("Erosion Decay (center → edge)");
+  erosionDecaySlider = createSlider(0, 1, 0.5, 0.01).parent(erD.ctrlWrap);
+  erosionDecaySlider.style("width:100%");
   erosionDecaySlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.erosionDecay = erD.val;
 
-  createDiv("<hr>").parent(uiPanel);
+  /* --------------------
+     Canvas scaling
+     -------------------- */
+  let rCSX = addRow("Canvas Width Scale");
+  canvasScaleXSlider = createSlider(0.5, 1.5, 1.0, 0.01).parent(rCSX.ctrlWrap);
+  canvasScaleXSlider.style("width:100%");
+  canvasScaleXSlider.input(resizeCanvasFromSliders);
+  valueSpans.canvasScaleX = rCSX.val;
 
-  /* ==========================================================
-     EXPORT + RESET
-     ========================================================== */
-  const btnWrap = createDiv().parent(uiPanel).style("margin-top:6px");
-  const exportBtn = createButton("Export SVG").parent(btnWrap).style("width:100%; margin-bottom:6px;");
-  exportBtn.mousePressed(() => exportSVG(true));
-  const exportPngBtn = createButton("Export PNG").parent(btnWrap).style("width:100%; margin-bottom:6px;");
-  exportPngBtn.mousePressed(() => saveCanvas("pattern", "png"));
+  let rCSY = addRow("Canvas Height Scale");
+  canvasScaleYSlider = createSlider(0.5, 1.5, 1.0, 0.01).parent(rCSY.ctrlWrap);
+  canvasScaleYSlider.style("width:100%");
+  canvasScaleYSlider.input(resizeCanvasFromSliders);
+  valueSpans.canvasScaleY = rCSY.val;
 
-  const resetBtn = createButton("Reset Selected Layer").parent(btnWrap).style("width:100%; margin-top:8px;");
-  resetBtn.mousePressed(() => { resetDefaults(); });
+  /* --------------------
+     Circular Array controls
+     -------------------- */
+  const arrRow = addRow("Circular Array Mode");
+  circularArrayCheckbox = createCheckbox("Enable Circular Array", false).parent(arrRow.ctrlWrap);
+  circularArrayCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
-  // wire inline-editable fields & finish UI wiring if you use those routines
-  if (typeof setupInlineEditableFields === "function") {
-    setupInlineEditableFields();
-  }
+  const scaleRow = addRow("Array Scale Start (%)");
+  arrayScaleStartSlider = createSlider(1, 400, 100, 1).parent(scaleRow.ctrlWrap);
+  arrayScaleStartSlider.style("width:100%");
+  arrayScaleStartSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.arrayScaleStart = scaleRow.val;
 
-  // finally populate layer select & sync UI
-  rebuildLayerList();
-  syncUIToLayer();
+  const scaleRow2 = addRow("Array Scale End (%)");
+  arrayScaleEndSlider = createSlider(1, 400, 100, 1).parent(scaleRow2.ctrlWrap);
+  arrayScaleEndSlider.style("width:100%");
+  arrayScaleEndSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.arrayScaleEnd = scaleRow2.val;
+
+  const spreadRow = addRow("Radial Spread (0 = centerLine only → 1 = start→end)");
+  radialSpreadSlider = createSlider(0, 1, 0, 0.01).parent(spreadRow.ctrlWrap);
+  radialSpreadSlider.style("width:100%");
+  radialSpreadSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+  valueSpans.radialSpread = spreadRow.val;
+
+  /* --------------------
+     Export & Reset
+     -------------------- */
+  const btnWrap = createDiv().parent(uiPanel);
+  btnWrap.style("margin-top:12px");
+
+  const exportBtn = createButton("Export SVG").parent(btnWrap);
+  exportBtn.style(`
+    width:100%;
+    padding:10px;
+    background:#1b1b1b;
+    color:#fff;
+    border:1px solid rgba(255,255,255,0.06);
+  `);
+  exportBtn.mousePressed(() => exportSVG(true)); // high-precision SVG export
+
+  const resetBtn = createButton("Reset Defaults (selected layer)").parent(btnWrap);
+  resetBtn.style(`
+    width:100%;
+    padding:8px;
+    margin-top:8px;
+    background:#222;
+    color:#fff;
+  `);
+  resetBtn.mousePressed(() => {
+    const l = layers[selectedLayerIndex];
+    const def = createDefaultLayer(l.name);
+    def.color = l.color;
+    layers[selectedLayerIndex] = def;
+    syncUIToLayer();
+    redraw();
+  });
+
+  if (waveMenu.value() !== "square") dutySlider.hide();
+
+  // After all controls created, wire up inline editing for each valueSpan
+  setupInlineEditableFields();
 }
+
 /* --------------------
    helpers: rebuild layer select
    -------------------- */
@@ -619,11 +695,11 @@ function syncUIToLayer() {
   // fib reverse button has no separate visual indicator; we show value in span
   if (valueSpans.fibReverse) valueSpans.fibReverse.html(l.fibonacciReversed ? "Reversed" : "");
 
-  // circular array values are now per-layer
-  if (circularArrayCheckbox) circularArrayCheckbox.checked(!!l.circularArrayEnabled);
-  if (arrayScaleStartSlider) arrayScaleStartSlider.value(l.arrayScaleStart);
-  if (arrayScaleEndSlider) arrayScaleEndSlider.value(l.arrayScaleEnd);
-  if (radialSpreadSlider) radialSpreadSlider.value(l.radialSpread);
+  // circular array default values (store globally, not per-layer)
+  if (arrayScaleStartSlider) arrayScaleStartSlider.value(100);
+  if (arrayScaleEndSlider) arrayScaleEndSlider.value(100);
+  if (radialSpreadSlider) radialSpreadSlider.value(0);
+  if (circularArrayCheckbox) circularArrayCheckbox.checked(false);
 
   updateRotationRangeFromShapeSelectors();
   updateLabelsAndRedraw();
@@ -666,13 +742,7 @@ function updateLayerFromUI(layerObj) {
   if (numSpiralsSlider) l.numSpiralTurns = int(numSpiralsSlider.value());
   // fibonacciReversed toggled by button (already stored)
 
-  // circular array per-layer storage
-  if (circularArrayCheckbox) l.circularArrayEnabled = circularArrayCheckbox.checked();
-  if (arrayScaleStartSlider) l.arrayScaleStart = Number(arrayScaleStartSlider.value());
-  if (arrayScaleEndSlider) l.arrayScaleEnd = Number(arrayScaleEndSlider.value());
-  if (radialSpreadSlider) l.radialSpread = Number(radialSpreadSlider.value());
-
-  // (log distribution remains a global slider for now)
+  // circular array controls are global for now (not stored per-layer)
 }
 
 /* -------------------- Reset -------------------- */
@@ -787,9 +857,9 @@ function updateLabelsAndRedraw() {
     valueSpans.fibReverse.html(l && l.fibonacciReversed ? "Reversed" : "");
   }
 
-  if (valueSpans.arrayScaleStart && arrayScaleStartSlider) valueSpans.arrayScaleStart.html(arrayScaleStartSlider.value());
-  if (valueSpans.arrayScaleEnd && arrayScaleEndSlider) valueSpans.arrayScaleEnd.html(arrayScaleEndSlider.value());
-  if (valueSpans.radialSpread && radialSpreadSlider) valueSpans.radialSpread.html(nf(radialSpreadSlider.value(), 1, 2));
+  if (valueSpans.arrayScaleStart) valueSpans.arrayScaleStart.html(arrayScaleStartSlider.value());
+  if (valueSpans.arrayScaleEnd) valueSpans.arrayScaleEnd.html(arrayScaleEndSlider.value());
+  if (valueSpans.radialSpread) valueSpans.radialSpread.html(nf(radialSpreadSlider.value(), 1, 2));
 
   redraw();
 }
@@ -846,18 +916,17 @@ function draw() {
       // We must apply logarithmic distribution to how shapes are distributed radially.
       let logVal = window.logDistSlider ? Number(window.logDistSlider.value()) : 0;
 
-      // If circular array enabled for this layer, draw count instances arranged around circle
-      const circularEnabled = !!L.circularArrayEnabled;
+      // If circular array enabled, draw count instances arranged around circle
+      const circularEnabled = circularArrayCheckbox && circularArrayCheckbox.checked();
       if (circularEnabled) {
-        const arrayCount = max(1, int(L.count));
-        const scaleStart = (L.arrayScaleStart || 100) / 100.0;
-        const scaleEnd = (L.arrayScaleEnd || 100) / 100.0;
-        const radialSpread = L.radialSpread || 0.0;
+        const arrayCount = max(1, int(countSlider.value()));
+        const scaleStart = arrayScaleStartSlider ? Number(arrayScaleStartSlider.value()) / 100.0 : 1.0;
+        const scaleEnd = arrayScaleEndSlider ? Number(arrayScaleEndSlider.value()) / 100.0 : 1.0;
+        const radialSpread = radialSpreadSlider ? Number(radialSpreadSlider.value()) : 0.0;
 
         for (let j = 0; j < arrayCount; j++) {
           let t = arrayCount > 1 ? j / (arrayCount - 1) : 0;
           // radial position between startR (center line) and endR (outer) controlled by radialSpread
-          // Interpretation: startR is center line radius, endR is outer radius ring; radialSpread scales how far along that interval instances move
           let rPos = lerp(L.startR, L.endR, radialSpread * t);
 
           // angle evenly distributed
@@ -866,27 +935,33 @@ function draw() {
           // per-instance scaling
           let instScale = lerp(scaleStart, scaleEnd, t);
 
-          // morph parameter — keep 0..1 mapping across instances same as other uses:
+          // morph parameter remains as configured (we can reuse t for morph or keep base morph)
+          let morphT = 0; // for arrayed copies, use center morph; user can still set start/end morph via layer count selection
+          // but to preserve prior behavior we keep shape sampling using 'tLayer' for morph between start/end shapes.
+          // Here we'll set morphT = 0 (start) — better: use same morph distribution as when count>1 originally
+          // Use morphT = 0 for simplicity (you can change this behavior later)
+          morphT = 0;
+
+          // compute a base radius for the sampled shape: we'll use the radius mapped via log distribution at t
           let mappedRadT = applyDistribution(t, logVal);
           let baseRadius = lerp(L.startR, L.endR, mappedRadT);
 
           push();
-          // move the origin to placement point (centered)
+          // move the origin to placement point
           translate(rPos * cos(angle), rPos * sin(angle));
-          // rotate each instance to face outward (auto-orient)
-          // Facing outward: rotate by angle so the "top" of the shape points away from center.
+          // rotate each instance to face outward (optional); rotate by angle so shape orientation follows the ring
           rotate(angle + radians(L.rotOffsetDeg));
           // scale instance
           scale(instScale);
 
-          // stroke weight must be scaled back so lines don't get too thin; set stroke weight per instance inversely to scale
+          // stroke weight must be scaled back so lines don't get too thin; we'll scale stroke weight inversely to scale
+          // but we choose to set strokeWeight per instance based on lerp between start/end line widths multiplied by scale
           let lwActual = lerp(L.lineWStart, L.lineWEnd, t) / max(0.0001, instScale);
           strokeWeight(max(0.1, lwActual));
 
           // draw the sampled shape centered at origin — use baseRadius as the radius param
           beginShape();
-          // Use morphT = 0 here for instances (you can adjust if you want per-instance morphing)
-          drawSampledShape(baseRadius, 0, L.freq, lerp(L.ampStart, L.ampEnd, t), L.wave, L.duty, L.startShape, L.endShape, 0, L.polySidesStart, L.polySidesEnd, li);
+          drawSampledShape(baseRadius, 0, L.freq, lerp(L.ampStart, L.ampEnd, t), L.wave, L.duty, L.startShape, L.endShape, morphT, L.polySidesStart, L.polySidesEnd, li);
           endShape(CLOSE);
 
           pop();
@@ -1334,15 +1409,15 @@ function exportSVG(isHighPrecision = false) {
     } else if (useFibonacci) {
       drawFibonacciLinesSVG(svg, L, li);
     } else {
-      // For SVG export: if circular array enabled for this layer, render the same array copies into SVG
-      const circularEnabled = !!L.circularArrayEnabled;
+      // For SVG export: if circular array enabled, render the same array copies into SVG
+      const circularEnabled = circularArrayCheckbox && circularArrayCheckbox.checked();
       let logVal = window.logDistSlider ? Number(window.logDistSlider.value()) : 0;
 
       if (circularEnabled) {
-        const arrayCount = max(1, int(L.count));
-        const scaleStart = (L.arrayScaleStart || 100) / 100.0;
-        const scaleEnd = (L.arrayScaleEnd || 100) / 100.0;
-        const radialSpread = L.radialSpread || 0.0;
+        const arrayCount = max(1, int(countSlider.value()));
+        const scaleStart = arrayScaleStartSlider ? Number(arrayScaleStartSlider.value()) / 100.0 : 1.0;
+        const scaleEnd = arrayScaleEndSlider ? Number(arrayScaleEndSlider.value()) / 100.0 : 1.0;
+        const radialSpread = radialSpreadSlider ? Number(radialSpreadSlider.value()) : 0.0;
 
         for (let j = 0; j < arrayCount; j++) {
           let t = arrayCount > 1 ? j / (arrayCount - 1) : 0;
