@@ -3,7 +3,8 @@
    - Log distribution affects radial placement for circles, radiating lines, and Fibonacci spirals
    - Fibonacci reverse properly reverses direction while keeping same start point
    - numSpiralTurns per-layer slider + SVG export
-   - NEW: Circular Array mode — distribute centered shapes around a ring with per-instance scaling and radial spread
+   - NEW: Per-layer Circular Array mode — distribute centered shapes around a ring with per-instance scaling and radial spread
+     * Auto-orient option (facing outward) implemented
 */
 
 /* --------------------
@@ -31,8 +32,9 @@ const SIDEBAR_WIDTH = 300;
 let sh2EnabledCheckbox;
 let sh2FreqSlider, sh2AmpSlider;
 
-/* --- Circular Array controls --- */
-let circularArrayCheckbox, arrayScaleStartSlider, arrayScaleEndSlider, radialSpreadSlider;
+/* --- Circular Array controls (UI elements) --- */
+let circularArrayCheckbox; // per-layer checkbox element
+let arrayScaleStartSlider, arrayScaleEndSlider, radialSpreadSlider;
 
 /* --- Layers state --- */
 let layers = [];
@@ -52,7 +54,7 @@ const LINE_STEP_T = 0.002;      // per-line sampling for radiating lines
 const CURVE_STEP_ANGLE = 0.002; // per-angle sampling for curves
 
 /* ==========================================================
-   Layer object
+   Layer object (now includes circular-array properties)
    ========================================================== */
 function createDefaultLayer(name = "Layer") {
   return {
@@ -83,7 +85,12 @@ function createDefaultLayer(name = "Layer") {
     erosionDecay: 0.5,
     // Fibonacci options
     fibonacciReversed: false,
-    numSpiralTurns: 4 // default number of turns for Fibonacci spiral
+    numSpiralTurns: 4, // default number of turns for Fibonacci spiral
+    // Circular array per-layer settings
+    circularArrayEnabled: false,
+    arrayScaleStart: 100, // percent
+    arrayScaleEnd: 100,   // percent
+    radialSpread: 0       // 0..1
   };
 }
 
@@ -113,9 +120,6 @@ function setup() {
   updateLabelsAndRedraw();
 }
 
-/* ===========================
-   SIDEBAR GUI
-   =========================== */
 function setupSidebarGUI() {
   uiPanel = createDiv();
   uiPanel.id("ui-panel");
@@ -150,6 +154,50 @@ function setupSidebarGUI() {
     return { row, label, ctrlWrap, val };
   }
 
+  // same as addRow but places the created row into an arbitrary parent element
+  function addRowTo(parentEl, labelText) {
+    const row = createDiv().parent(parentEl);
+    row.style("margin-bottom: 12px");
+
+    const label = createP(labelText).parent(row);
+    label.style("margin:0 0 6px 0; font-size:13px; color:#ddd;");
+
+    const val = createSpan("").parent(row);
+    val.style("float:right; color:#9bd; font-weight:600; cursor:pointer;");
+
+    const ctrlWrap = createDiv().parent(row);
+    ctrlWrap.style("margin-top:6px;");
+
+    return { row, label, ctrlWrap, val };
+  }
+
+  // helper to create collapsible section
+  function createCollapsible(title, initiallyOpen = true) {
+    const header = createDiv().parent(uiPanel);
+    header.style("display:flex; align-items:center; justify-content:space-between; cursor:pointer; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.03); margin-bottom:8px;");
+    const titleP = createP(title).parent(header);
+    titleP.style("margin:0; font-size:13px; color:#ddd;");
+
+    const caret = createSpan(initiallyOpen ? "▾" : "▸").parent(header);
+    caret.style("color:#9bd; font-weight:700;");
+
+    const content = createDiv().parent(uiPanel);
+    content.style(`margin-bottom:12px; display:${initiallyOpen ? "block" : "none"};`);
+
+    header.mousePressed(() => {
+      const isOpen = content.style("display") !== "none";
+      if (isOpen) {
+        content.style("display", "none");
+        caret.html("▸");
+      } else {
+        content.style("display", "block");
+        caret.html("▾");
+      }
+    });
+
+    return { header, content, caret };
+  }
+
   // --- Layer selector + add/delete/duplicate + color ---
   const layerRow = addRow("Layers");
   layerSelect = createSelect().parent(layerRow.ctrlWrap);
@@ -166,7 +214,8 @@ function setupSidebarGUI() {
   addLayerBtn.mousePressed(() => {
     const idx = layers.length + 1;
     const newLayer = createDefaultLayer("Layer " + idx);
-    updateLayerFromUI(newLayer); // copy current UI into new layer
+    // copy current UI into new layer so new layer starts from current settings
+    updateLayerFromUI(newLayer);
     layers.push(newLayer);
     selectedLayerIndex = layers.length - 1;
     rebuildLayerList();
@@ -368,18 +417,20 @@ function setupSidebarGUI() {
   valueSpans.duty = rDuty.val;
 
   /* --------------------
-     Secondary S&H Modulation
+     Secondary S&H Modulation (collapsible)
      -------------------- */
-  let shH = addRow("Secondary S&H Enabled");
+  const shPanel = createCollapsible("Secondary Sample & Hold (S&H) — modulation", true);
+  // Put S&H controls into shPanel.content using addRowTo
+  let shH = addRowTo(shPanel.content, "Secondary S&H Enabled");
   sh2EnabledCheckbox = createCheckbox("", false).parent(shH.ctrlWrap);
   sh2EnabledCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
-  let shF = addRow("S&H Frequency (cycles per segment)");
+  let shF = addRowTo(shPanel.content, "S&H Frequency (cycles per segment)");
   sh2FreqSlider = createSlider(0.1, 60, 8, 0.1).parent(shF.ctrlWrap);
   sh2FreqSlider.style("width:100%");
   sh2FreqSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
-  let shA = addRow("S&H Amplitude (+ only)");
+  let shA = addRowTo(shPanel.content, "S&H Amplitude (+ only)");
   sh2AmpSlider = createSlider(0, 200, 20, 0.1).parent(shA.ctrlWrap); // scale matches amp units
   sh2AmpSlider.style("width:100%");
   sh2AmpSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
@@ -403,25 +454,27 @@ function setupSidebarGUI() {
   valueSpans.lineWEnd = rLW2.val;
 
   /* --------------------
-     EROSION (Perlin noise) UI
+     EROSION (Perlin noise) UI (collapsible)
      -------------------- */
-  let erH = addRow("Enable Erosion (Perlin)");
+  const erPanel = createCollapsible("Erosion (Perlin noise)", false);
+  // Put erosion controls into erPanel.content using addRowTo
+  let erH = addRowTo(erPanel.content, "Enable Erosion (Perlin)");
   erosionEnabledCheckbox = createCheckbox("", false).parent(erH.ctrlWrap);
   erosionEnabledCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
-  let erS = addRow("Erosion Noise Scale");
+  let erS = addRowTo(erPanel.content, "Erosion Noise Scale");
   erosionScaleSlider = createSlider(0.30, 10, 2.0, 0.01).parent(erS.ctrlWrap);
   erosionScaleSlider.style("width:100%");
   erosionScaleSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.erosionScale = erS.val;
 
-  let erT = addRow("Erosion Threshold");
+  let erT = addRowTo(erPanel.content, "Erosion Threshold");
   erosionThresholdSlider = createSlider(0.36, 1, 0.5, 0.01).parent(erT.ctrlWrap);
   erosionThresholdSlider.style("width:100%");
   erosionThresholdSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
   valueSpans.erosionThreshold = erT.val;
 
-  let erD = addRow("Erosion Decay (center → edge)");
+  let erD = addRowTo(erPanel.content, "Erosion Decay (center → edge)");
   erosionDecaySlider = createSlider(0, 1, 0.5, 0.01).parent(erD.ctrlWrap);
   erosionDecaySlider.style("width:100%");
   erosionDecaySlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
@@ -443,9 +496,10 @@ function setupSidebarGUI() {
   valueSpans.canvasScaleY = rCSY.val;
 
   /* --------------------
-     Circular Array controls
+     Circular Array controls (per-layer)
      -------------------- */
-  const arrRow = addRow("Circular Array Mode");
+  const arrRow = addRow("Circular Array Mode (per-layer)");
+  // We'll create the UI elements but their values will be synced to the selected layer
   circularArrayCheckbox = createCheckbox("Enable Circular Array", false).parent(arrRow.ctrlWrap);
   circularArrayCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
@@ -695,11 +749,11 @@ function syncUIToLayer() {
   // fib reverse button has no separate visual indicator; we show value in span
   if (valueSpans.fibReverse) valueSpans.fibReverse.html(l.fibonacciReversed ? "Reversed" : "");
 
-  // circular array default values (store globally, not per-layer)
-  if (arrayScaleStartSlider) arrayScaleStartSlider.value(100);
-  if (arrayScaleEndSlider) arrayScaleEndSlider.value(100);
-  if (radialSpreadSlider) radialSpreadSlider.value(0);
-  if (circularArrayCheckbox) circularArrayCheckbox.checked(false);
+  // circular array values are now per-layer
+  if (circularArrayCheckbox) circularArrayCheckbox.checked(!!l.circularArrayEnabled);
+  if (arrayScaleStartSlider) arrayScaleStartSlider.value(l.arrayScaleStart);
+  if (arrayScaleEndSlider) arrayScaleEndSlider.value(l.arrayScaleEnd);
+  if (radialSpreadSlider) radialSpreadSlider.value(l.radialSpread);
 
   updateRotationRangeFromShapeSelectors();
   updateLabelsAndRedraw();
@@ -742,7 +796,13 @@ function updateLayerFromUI(layerObj) {
   if (numSpiralsSlider) l.numSpiralTurns = int(numSpiralsSlider.value());
   // fibonacciReversed toggled by button (already stored)
 
-  // circular array controls are global for now (not stored per-layer)
+  // circular array per-layer storage
+  if (circularArrayCheckbox) l.circularArrayEnabled = circularArrayCheckbox.checked();
+  if (arrayScaleStartSlider) l.arrayScaleStart = Number(arrayScaleStartSlider.value());
+  if (arrayScaleEndSlider) l.arrayScaleEnd = Number(arrayScaleEndSlider.value());
+  if (radialSpreadSlider) l.radialSpread = Number(radialSpreadSlider.value());
+
+  // (log distribution remains a global slider for now)
 }
 
 /* -------------------- Reset -------------------- */
@@ -857,9 +917,9 @@ function updateLabelsAndRedraw() {
     valueSpans.fibReverse.html(l && l.fibonacciReversed ? "Reversed" : "");
   }
 
-  if (valueSpans.arrayScaleStart) valueSpans.arrayScaleStart.html(arrayScaleStartSlider.value());
-  if (valueSpans.arrayScaleEnd) valueSpans.arrayScaleEnd.html(arrayScaleEndSlider.value());
-  if (valueSpans.radialSpread) valueSpans.radialSpread.html(nf(radialSpreadSlider.value(), 1, 2));
+  if (valueSpans.arrayScaleStart && arrayScaleStartSlider) valueSpans.arrayScaleStart.html(arrayScaleStartSlider.value());
+  if (valueSpans.arrayScaleEnd && arrayScaleEndSlider) valueSpans.arrayScaleEnd.html(arrayScaleEndSlider.value());
+  if (valueSpans.radialSpread && radialSpreadSlider) valueSpans.radialSpread.html(nf(radialSpreadSlider.value(), 1, 2));
 
   redraw();
 }
@@ -916,17 +976,18 @@ function draw() {
       // We must apply logarithmic distribution to how shapes are distributed radially.
       let logVal = window.logDistSlider ? Number(window.logDistSlider.value()) : 0;
 
-      // If circular array enabled, draw count instances arranged around circle
-      const circularEnabled = circularArrayCheckbox && circularArrayCheckbox.checked();
+      // If circular array enabled for this layer, draw count instances arranged around circle
+      const circularEnabled = !!L.circularArrayEnabled;
       if (circularEnabled) {
-        const arrayCount = max(1, int(countSlider.value()));
-        const scaleStart = arrayScaleStartSlider ? Number(arrayScaleStartSlider.value()) / 100.0 : 1.0;
-        const scaleEnd = arrayScaleEndSlider ? Number(arrayScaleEndSlider.value()) / 100.0 : 1.0;
-        const radialSpread = radialSpreadSlider ? Number(radialSpreadSlider.value()) : 0.0;
+        const arrayCount = max(1, int(L.count));
+        const scaleStart = (L.arrayScaleStart || 100) / 100.0;
+        const scaleEnd = (L.arrayScaleEnd || 100) / 100.0;
+        const radialSpread = L.radialSpread || 0.0;
 
         for (let j = 0; j < arrayCount; j++) {
           let t = arrayCount > 1 ? j / (arrayCount - 1) : 0;
           // radial position between startR (center line) and endR (outer) controlled by radialSpread
+          // Interpretation: startR is center line radius, endR is outer radius ring; radialSpread scales how far along that interval instances move
           let rPos = lerp(L.startR, L.endR, radialSpread * t);
 
           // angle evenly distributed
@@ -935,33 +996,27 @@ function draw() {
           // per-instance scaling
           let instScale = lerp(scaleStart, scaleEnd, t);
 
-          // morph parameter remains as configured (we can reuse t for morph or keep base morph)
-          let morphT = 0; // for arrayed copies, use center morph; user can still set start/end morph via layer count selection
-          // but to preserve prior behavior we keep shape sampling using 'tLayer' for morph between start/end shapes.
-          // Here we'll set morphT = 0 (start) — better: use same morph distribution as when count>1 originally
-          // Use morphT = 0 for simplicity (you can change this behavior later)
-          morphT = 0;
-
-          // compute a base radius for the sampled shape: we'll use the radius mapped via log distribution at t
+          // morph parameter — keep 0..1 mapping across instances same as other uses:
           let mappedRadT = applyDistribution(t, logVal);
           let baseRadius = lerp(L.startR, L.endR, mappedRadT);
 
           push();
-          // move the origin to placement point
+          // move the origin to placement point (centered)
           translate(rPos * cos(angle), rPos * sin(angle));
-          // rotate each instance to face outward (optional); rotate by angle so shape orientation follows the ring
+          // rotate each instance to face outward (auto-orient)
+          // Facing outward: rotate by angle so the "top" of the shape points away from center.
           rotate(angle + radians(L.rotOffsetDeg));
           // scale instance
           scale(instScale);
 
-          // stroke weight must be scaled back so lines don't get too thin; we'll scale stroke weight inversely to scale
-          // but we choose to set strokeWeight per instance based on lerp between start/end line widths multiplied by scale
+          // stroke weight must be scaled back so lines don't get too thin; set stroke weight per instance inversely to scale
           let lwActual = lerp(L.lineWStart, L.lineWEnd, t) / max(0.0001, instScale);
           strokeWeight(max(0.1, lwActual));
 
           // draw the sampled shape centered at origin — use baseRadius as the radius param
           beginShape();
-          drawSampledShape(baseRadius, 0, L.freq, lerp(L.ampStart, L.ampEnd, t), L.wave, L.duty, L.startShape, L.endShape, morphT, L.polySidesStart, L.polySidesEnd, li);
+          // Use morphT = 0 here for instances (you can adjust if you want per-instance morphing)
+          drawSampledShape(baseRadius, 0, L.freq, lerp(L.ampStart, L.ampEnd, t), L.wave, L.duty, L.startShape, L.endShape, 0, L.polySidesStart, L.polySidesEnd, li);
           endShape(CLOSE);
 
           pop();
@@ -1409,15 +1464,15 @@ function exportSVG(isHighPrecision = false) {
     } else if (useFibonacci) {
       drawFibonacciLinesSVG(svg, L, li);
     } else {
-      // For SVG export: if circular array enabled, render the same array copies into SVG
-      const circularEnabled = circularArrayCheckbox && circularArrayCheckbox.checked();
+      // For SVG export: if circular array enabled for this layer, render the same array copies into SVG
+      const circularEnabled = !!L.circularArrayEnabled;
       let logVal = window.logDistSlider ? Number(window.logDistSlider.value()) : 0;
 
       if (circularEnabled) {
-        const arrayCount = max(1, int(countSlider.value()));
-        const scaleStart = arrayScaleStartSlider ? Number(arrayScaleStartSlider.value()) / 100.0 : 1.0;
-        const scaleEnd = arrayScaleEndSlider ? Number(arrayScaleEndSlider.value()) / 100.0 : 1.0;
-        const radialSpread = radialSpreadSlider ? Number(radialSpreadSlider.value()) : 0.0;
+        const arrayCount = max(1, int(L.count));
+        const scaleStart = (L.arrayScaleStart || 100) / 100.0;
+        const scaleEnd = (L.arrayScaleEnd || 100) / 100.0;
+        const radialSpread = L.radialSpread || 0.0;
 
         for (let j = 0; j < arrayCount; j++) {
           let t = arrayCount > 1 ? j / (arrayCount - 1) : 0;
