@@ -119,8 +119,15 @@ function setup() {
   onWaveChange();
   updateLabelsAndRedraw();
 }
-
+/* ==========================================================
+   SIDEBAR GUI — merged with collapsible sections (updated)
+   ========================================================== */
 function setupSidebarGUI() {
+  // remove any existing panel if re-running in live edit
+  if (uiPanel && uiPanel.elt) {
+    try { uiPanel.remove(); } catch (e) {}
+  }
+
   uiPanel = createDiv();
   uiPanel.id("ui-panel");
   uiPanel.style(`
@@ -131,91 +138,64 @@ function setupSidebarGUI() {
     height: 100vh;
     background: #111;
     color: #fff;
-    padding: 14px;
+    padding: 12px;
     overflow-y: auto;
     box-sizing: border-box;
     font-family: Arial, Helvetica, sans-serif;
+    font-size: 13px;
     border-right: 1px solid rgba(255,255,255,0.04);
   `);
 
-  function addRow(labelText) {
-    const row = createDiv().parent(uiPanel);
-    row.style("margin-bottom: 12px");
-
-    const label = createP(labelText).parent(row);
-    label.style("margin:0 0 6px 0; font-size:13px; color:#ddd;");
-
-    const val = createSpan("").parent(row);
-    val.style("float:right; color:#9bd; font-weight:600; cursor:pointer;");
-
-    const ctrlWrap = createDiv().parent(row);
-    ctrlWrap.style("margin-top:6px;");
-
-    return { row, label, ctrlWrap, val };
+  function sectionTitle(text) {
+    const d = createDiv(text).parent(uiPanel);
+    d.style("font-weight:700; margin-top:6px; color:#e6f1ff;");
+    return d;
   }
 
-  // same as addRow but places the created row into an arbitrary parent element
-  function addRowTo(parentEl, labelText) {
-    const row = createDiv().parent(parentEl);
-    row.style("margin-bottom: 12px");
+  /* -----------------------------------------------
+     Helper: collapsible section generator
+     returns content container (p5.Element)
+     ----------------------------------------------- */
+  function createCollapsible(parent, titleText, initiallyOpen = false) {
+    const wrap = createDiv().parent(parent).style("margin-top","8px");
+    const header = createDiv(titleText)
+      .parent(wrap)
+      .style("font-weight","700")
+      .style("cursor","pointer")
+      .style("padding","6px 0")
+      .style("color","#d8eaff");
 
-    const label = createP(labelText).parent(row);
-    label.style("margin:0 0 6px 0; font-size:13px; color:#ddd;");
+    const content = createDiv()
+      .parent(wrap)
+      .style("margin-left","6px");
 
-    const val = createSpan("").parent(row);
-    val.style("float:right; color:#9bd; font-weight:600; cursor:pointer;");
-
-    const ctrlWrap = createDiv().parent(row);
-    ctrlWrap.style("margin-top:6px;");
-
-    return { row, label, ctrlWrap, val };
-  }
-
-  // helper to create collapsible section
-  function createCollapsible(title, initiallyOpen = true) {
-    const header = createDiv().parent(uiPanel);
-    header.style("display:flex; align-items:center; justify-content:space-between; cursor:pointer; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.03); margin-bottom:8px;");
-    const titleP = createP(title).parent(header);
-    titleP.style("margin:0; font-size:13px; color:#ddd;");
-
-    const caret = createSpan(initiallyOpen ? "▾" : "▸").parent(header);
-    caret.style("color:#9bd; font-weight:700;");
-
-    const content = createDiv().parent(uiPanel);
-    content.style(`margin-bottom:12px; display:${initiallyOpen ? "block" : "none"};`);
+    content.style("display", initiallyOpen ? "block" : "none");
 
     header.mousePressed(() => {
-      const isOpen = content.style("display") !== "none";
-      if (isOpen) {
-        content.style("display", "none");
-        caret.html("▸");
-      } else {
-        content.style("display", "block");
-        caret.html("▾");
-      }
+      let cur = content.style("display");
+      content.style("display", cur === "none" ? "block" : "none");
     });
 
-    return { header, content, caret };
+    return content;
   }
 
-  // --- Layer selector + add/delete/duplicate + color ---
-  const layerRow = addRow("Layers");
-  layerSelect = createSelect().parent(layerRow.ctrlWrap);
-  layerSelect.style("width:100%");
+  /* ==========================================================
+     LAYERS
+     ========================================================== */
+  sectionTitle("Layers");
+  layerSelect = createSelect().parent(uiPanel).style("width:100%; margin-bottom:6px;");
   layerSelect.changed(() => {
     const v = layerSelect.value();
     selectedLayerIndex = Math.max(0, Math.min(layers.length - 1, int(v)));
     syncUIToLayer();
   });
 
-  const layerBtnRow = createDiv().parent(uiPanel);
-  layerBtnRow.style("display:flex; gap:6px; margin-bottom:10px;");
-  addLayerBtn = createButton("+ Add Layer").parent(layerBtnRow);
+  const layerBtnRow = createDiv().parent(uiPanel).style("display:flex; gap:6px; margin-bottom:10px;");
+  addLayerBtn = createButton("+ Add").parent(layerBtnRow);
   addLayerBtn.mousePressed(() => {
-    const idx = layers.length + 1;
-    const newLayer = createDefaultLayer("Layer " + idx);
-    // copy current UI into new layer so new layer starts from current settings
-    updateLayerFromUI(newLayer);
+    // create layer using defaults but copy current UI values into it
+    const newLayer = createDefaultLayer("Layer " + (layers.length + 1));
+    updateLayerFromUI(newLayer); // copy current live UI into created layer
     layers.push(newLayer);
     selectedLayerIndex = layers.length - 1;
     rebuildLayerList();
@@ -223,20 +203,12 @@ function setupSidebarGUI() {
     redraw();
   });
 
-  dupLayerBtn = createButton("Duplicate Layer").parent(layerBtnRow);
+  dupLayerBtn = createButton("Duplicate").parent(layerBtnRow);
   dupLayerBtn.mousePressed(() => {
     const src = layers[selectedLayerIndex];
     if (!src) return;
     const clone = JSON.parse(JSON.stringify(src));
-    let base = src.name || "Layer";
-    let suffix = " copy";
-    let newName = base + suffix;
-    let i = 2;
-    while (layers.some(l => l.name === newName)) {
-      newName = base + " copy " + i;
-      i++;
-    }
-    clone.name = newName;
+    clone.name = (src.name || "Layer") + " copy";
     layers.push(clone);
     selectedLayerIndex = layers.length - 1;
     rebuildLayerList();
@@ -244,7 +216,7 @@ function setupSidebarGUI() {
     redraw();
   });
 
-  delLayerBtn = createButton("Delete Layer").parent(layerBtnRow);
+  delLayerBtn = createButton("- Delete").parent(layerBtnRow);
   delLayerBtn.mousePressed(() => {
     if (layers.length <= 1) return;
     layers.splice(selectedLayerIndex, 1);
@@ -254,312 +226,210 @@ function setupSidebarGUI() {
     redraw();
   });
 
-  const colorRow = addRow("Layer Color");
-  layerColorPicker = createColorPicker('#ffffff').parent(colorRow.ctrlWrap);
-  layerColorPicker.input(() => {
-    const l = layers[selectedLayerIndex];
-    l.color = layerColorPicker.value();
-    redraw();
-  });
-  valueSpans.layerColor = colorRow.val;
+  createDiv("<hr>").parent(uiPanel);
 
-  /* --------------------
-     Start / End Radius
-     -------------------- */
-  let r1 = addRow("Start Radius");
-  startRSlider = createSlider(10, 300, 60, 1).parent(r1.ctrlWrap);
-  startRSlider.style("width:100%");
-  startRSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.startR = r1.val;
+  /* ==========================================================
+     MAIN SHAPE CONTROLS
+     ========================================================== */
+  sectionTitle("Shape / Morph");
 
-  let r2 = addRow("End Radius");
-  endRSlider = createSlider(10, 400, 220, 1).parent(r2.ctrlWrap);
-  endRSlider.style("width:100%");
-  endRSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.endR = r2.val;
-
-  /* --------------------
-     Start / End Shape (morph targets)
-     -------------------- */
-  let rStartShape = addRow("Start Shape");
-  startShapeSelect = createSelect().parent(rStartShape.ctrlWrap);
+  createDiv("Start Shape").parent(uiPanel);
+  startShapeSelect = createSelect().parent(uiPanel).style("width:100%");
   startShapeSelect.option("concentric circles");
   startShapeSelect.option("multi-sided shapes");
   startShapeSelect.option("radiating lines");
-  startShapeSelect.option("fibonacci spiral"); // added shape
-  startShapeSelect.style("width:100%");
+  startShapeSelect.option("fibonacci spiral");
   startShapeSelect.changed(() => { updateRotationRangeFromShapeSelectors(); updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.startShape = rStartShape.val;
 
-  let rEndShape = addRow("End Shape");
-  endShapeSelect = createSelect().parent(rEndShape.ctrlWrap);
+  createDiv("End Shape").parent(uiPanel);
+  endShapeSelect = createSelect().parent(uiPanel).style("width:100%");
   endShapeSelect.option("concentric circles");
   endShapeSelect.option("multi-sided shapes");
   endShapeSelect.option("radiating lines");
-  endShapeSelect.option("fibonacci spiral"); // added shape
-  endShapeSelect.style("width:100%");
+  endShapeSelect.option("fibonacci spiral");
   endShapeSelect.changed(() => { updateRotationRangeFromShapeSelectors(); updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.endShape = rEndShape.val;
 
-  /* --------------------
-     Polygon Sides - START / END (independent)
-     -------------------- */
-  let rPolyStart = addRow("Polygon Sides (Start)");
-  polySidesStartSlider = createSlider(3, 48, 6, 1).parent(rPolyStart.ctrlWrap);
-  polySidesStartSlider.style("width:100%");
-  polySidesStartSlider.input(() => { updateRotationRangeFromShapeSelectors(); updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.polySidesStart = rPolyStart.val;
-
-  let rPolyEnd = addRow("Polygon Sides (End)");
-  polySidesEndSlider = createSlider(3, 48, 6, 1).parent(rPolyEnd.ctrlWrap);
-  polySidesEndSlider.style("width:100%");
-  polySidesEndSlider.input(() => { updateRotationRangeFromShapeSelectors(); updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.polySidesEnd = rPolyEnd.val;
-
-  /* --------------------
-     Waveform parameters
-     -------------------- */
-  let rFreq = addRow("Frequency");
-  freqSlider = createSlider(0, 96, 12, 1).parent(rFreq.ctrlWrap);
-  freqSlider.style("width:100%");
-  freqSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.freq = rFreq.val;
-
-  /* --------------------
-     Amplitude Start / End (NEW)
-     -------------------- */
-  let rAmpStart = addRow("Amplitude Start");
-  ampStartSlider = createSlider(0, 240, 80, 1).parent(rAmpStart.ctrlWrap);
-  ampStartSlider.style("width:100%");
-  ampStartSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.ampStart = rAmpStart.val;
-
-  let rAmpEnd = addRow("Amplitude End");
-  ampEndSlider = createSlider(0, 240, 30, 1).parent(rAmpEnd.ctrlWrap);
-  ampEndSlider.style("width:100%");
-  ampEndSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.ampEnd = rAmpEnd.val;
-
-  /* --------------------
-     Count + Rotation offset
-     -------------------- */
-  let rCount = addRow("Shapes (count)");
-  countSlider = createSlider(1, 120, 10, 1).parent(rCount.ctrlWrap); // default 10
-  countSlider.style("width:100%");
+  createDiv("Shapes (count)").parent(uiPanel);
+  countSlider = createSlider(1, 200, 12, 1).parent(uiPanel).style("width","100%");
   countSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.count = rCount.val;
 
-  let rRot = addRow("Rotation Offset (deg)");
-  rotSlider = createSlider(-30, 180, 0, 0.1).parent(rRot.ctrlWrap);
-  rotSlider.style("width:100%");
+  createDiv("Start Radius").parent(uiPanel);
+  startRSlider = createSlider(1, 2000, 60, 1).parent(uiPanel).style("width","100%");
+  startRSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  createDiv("End Radius").parent(uiPanel);
+  endRSlider = createSlider(1, 2000, 220, 1).parent(uiPanel).style("width","100%");
+  endRSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  createDiv("Rotation Offset (deg)").parent(uiPanel);
+  rotSlider = createSlider(-360, 360, 0, 0.1).parent(uiPanel).style("width","100%");
   rotSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.rot = rRot.val;
 
-  /* --------------------
-     GLOBAL ROTATION (now per-layer)
-     -------------------- */
-  let rGR = addRow("Global Rotation (deg) — per-layer");
-  globalRotSlider = createSlider(-180, 180, 0, 0.1).parent(rGR.ctrlWrap);
-  globalRotSlider.style("width:100%");
+  createDiv("Global Rotation (deg)").parent(uiPanel);
+  globalRotSlider = createSlider(-180, 180, 0, 0.1).parent(uiPanel).style("width","100%");
   globalRotSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.globalRot = rGR.val;
 
-  /* --------------------
-     Fibonacci reverse button (only shown for Fibonacci) + turns + log distribution slider
-     -------------------- */
-  // reverse button row
-  const fibRow = addRow("Fibonacci Options");
-  // reverse button
-  const fibReverseBtn = createButton("Reverse Spiral").parent(fibRow.ctrlWrap);
+  createDiv("Frequency").parent(uiPanel);
+  freqSlider = createSlider(0, 96, 12, 1).parent(uiPanel).style("width","100%");
+  freqSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  createDiv("Amplitude Start").parent(uiPanel);
+  ampStartSlider = createSlider(0, 240, 30, 1).parent(uiPanel).style("width","100%");
+  ampStartSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  createDiv("Amplitude End").parent(uiPanel);
+  ampEndSlider = createSlider(0, 240, 0, 1).parent(uiPanel).style("width","100%");
+  ampEndSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  createDiv("Line Width Start").parent(uiPanel);
+  lineWStartSlider = createSlider(0.1, 100, 2, 0.1).parent(uiPanel).style("width","100%");
+  lineWStartSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  createDiv("Line Width End").parent(uiPanel);
+  lineWEndSlider = createSlider(0.1, 100, 2, 0.1).parent(uiPanel).style("width","100%");
+  lineWEndSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  createDiv("Polygon Sides (Start)").parent(uiPanel);
+  polySidesStartSlider = createSlider(3, 48, 6, 1).parent(uiPanel).style("width","100%");
+  polySidesStartSlider.input(() => { updateRotationRangeFromShapeSelectors(); updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  createDiv("Polygon Sides (End)").parent(uiPanel);
+  polySidesEndSlider = createSlider(3, 48, 6, 1).parent(uiPanel).style("width","100%");
+  polySidesEndSlider.input(() => { updateRotationRangeFromShapeSelectors(); updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  // Fibonacci controls
+  createDiv("Number of Spiral Turns").parent(uiPanel);
+  numSpiralsSlider = createSlider(1, 12, 4, 1).parent(uiPanel).style("width","100%");
+  numSpiralsSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  const fibRow = createDiv().parent(uiPanel).style("display:flex; gap:8px; align-items:center;");
+  fibReverseBtn = createButton("Reverse Spiral").parent(fibRow);
   fibReverseBtn.mousePressed(() => {
     const L = layers[selectedLayerIndex];
+    if (!L) return;
     L.fibonacciReversed = !L.fibonacciReversed;
     syncUIToLayer();
     redraw();
   });
-  valueSpans.fibReverse = fibRow.val;
 
-  // number of spiral turns (per-layer)
-  const spiralRow = addRow("Number of Spiral Turns");
-  numSpiralsSlider = createSlider(1, 12, 4, 1).parent(spiralRow.ctrlWrap);
-  numSpiralsSlider.style("width:100%");
-  numSpiralsSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.numSpirals = spiralRow.val;
+  createDiv("Logarithmic Distribution").parent(uiPanel);
+  // expose the same global slider object your rest of code expects
+  window.logDistSlider = createSlider(-3, 3, 0, 0.01).parent(uiPanel).style("width","100%");
+  logDistSlider.input(() => { updateLabelsAndRedraw(); });
 
-  // log distribution slider (positive/negative)
-  const logRow = addRow("Logarithmic Distribution");
-  // range -3..3 (user can type arbitrary values via the numeric input)
-  var logSlider = createSlider(-3, 3, 0, 0.01).parent(logRow.ctrlWrap);
-  logSlider.style("width:100%");
-  // store as a top-level so the editable code can attach
-  window.logDistSlider = logSlider;
-  logSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.logDist = logRow.val;
+  createDiv("<hr>").parent(uiPanel);
 
-  /* --------------------
-     Waveform type + duty
-     -------------------- */
-  let rWave = addRow("Waveform");
-  waveMenu = createSelect().parent(rWave.ctrlWrap);
-  waveMenu.option("sine");
-  waveMenu.option("cosine");
-  waveMenu.option("square");
-  waveMenu.option("triangle");
-  waveMenu.option("sample & hold");
-  waveMenu.changed(() => { onWaveChange(); updateLayerFromUI(); });
-  waveMenu.style("width:100%");
-  valueSpans.wave = rWave.val;
+  /* ==========================================================
+     CANVAS SIZE & SCALE — COLLAPSIBLE (per your request)
+     ========================================================== */
+  const canvasSec = createCollapsible(uiPanel, "Canvas Size & Scale", false);
 
-  let rDuty = addRow("Duty Cycle (%)");
-  dutySlider = createSlider(1, 99, 50, 1).parent(rDuty.ctrlWrap);
-  dutySlider.style("width:100%");
-  dutySlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.duty = rDuty.val;
+  createDiv("Canvas Width (px)").parent(canvasSec);
+  // show current canvas width in input; keep as informational editable
+  window.canvasWInput = createInput(width.toString()).parent(canvasSec).style("width","100%");
+  createDiv("Canvas Height (px)").parent(canvasSec);
+  window.canvasHInput = createInput(height.toString()).parent(canvasSec).style("width","100%");
 
-  /* --------------------
-     Secondary S&H Modulation (collapsible)
-     -------------------- */
-  const shPanel = createCollapsible("Secondary Sample & Hold (S&H) — modulation", true);
-  // Put S&H controls into shPanel.content using addRowTo
-  let shH = addRowTo(shPanel.content, "Secondary S&H Enabled");
-  sh2EnabledCheckbox = createCheckbox("", false).parent(shH.ctrlWrap);
-  sh2EnabledCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  let shF = addRowTo(shPanel.content, "S&H Frequency (cycles per segment)");
-  sh2FreqSlider = createSlider(0.1, 60, 8, 0.1).parent(shF.ctrlWrap);
-  sh2FreqSlider.style("width:100%");
-  sh2FreqSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  let shA = addRowTo(shPanel.content, "S&H Amplitude (+ only)");
-  sh2AmpSlider = createSlider(0, 200, 20, 0.1).parent(shA.ctrlWrap); // scale matches amp units
-  sh2AmpSlider.style("width:100%");
-  sh2AmpSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  valueSpans.sh2Freq = shF.val;
-  valueSpans.sh2Amp = shA.val;
-
-  /* --------------------
-     Line widths
-     -------------------- */
-  let rLW1 = addRow("Line Width Start");
-  lineWStartSlider = createSlider(0.1, 100, 2, 0.1).parent(rLW1.ctrlWrap);
-  lineWStartSlider.style("width:100%");
-  lineWStartSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.lineWStart = rLW1.val;
-
-  let rLW2 = addRow("Line Width End");
-  lineWEndSlider = createSlider(0.1, 100, 2, 0.1).parent(rLW2.ctrlWrap);
-  lineWEndSlider.style("width:100%");
-  lineWEndSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.lineWEnd = rLW2.val;
-
-  /* --------------------
-     EROSION (Perlin noise) UI (collapsible)
-     -------------------- */
-  const erPanel = createCollapsible("Erosion (Perlin noise)", false);
-  // Put erosion controls into erPanel.content using addRowTo
-  let erH = addRowTo(erPanel.content, "Enable Erosion (Perlin)");
-  erosionEnabledCheckbox = createCheckbox("", false).parent(erH.ctrlWrap);
-  erosionEnabledCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-
-  let erS = addRowTo(erPanel.content, "Erosion Noise Scale");
-  erosionScaleSlider = createSlider(0.30, 10, 2.0, 0.01).parent(erS.ctrlWrap);
-  erosionScaleSlider.style("width:100%");
-  erosionScaleSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.erosionScale = erS.val;
-
-  let erT = addRowTo(erPanel.content, "Erosion Threshold");
-  erosionThresholdSlider = createSlider(0.36, 1, 0.5, 0.01).parent(erT.ctrlWrap);
-  erosionThresholdSlider.style("width:100%");
-  erosionThresholdSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.erosionThreshold = erT.val;
-
-  let erD = addRowTo(erPanel.content, "Erosion Decay (center → edge)");
-  erosionDecaySlider = createSlider(0, 1, 0.5, 0.01).parent(erD.ctrlWrap);
-  erosionDecaySlider.style("width:100%");
-  erosionDecaySlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.erosionDecay = erD.val;
-
-  /* --------------------
-     Canvas scaling
-     -------------------- */
-  let rCSX = addRow("Canvas Width Scale");
-  canvasScaleXSlider = createSlider(0.5, 1.5, 1.0, 0.01).parent(rCSX.ctrlWrap);
-  canvasScaleXSlider.style("width:100%");
+  createDiv("Canvas Width Scale (mult)").parent(canvasSec);
+  canvasScaleXSlider = createSlider(0.5, 1.5, 1.0, 0.01).parent(canvasSec).style("width","100%");
   canvasScaleXSlider.input(resizeCanvasFromSliders);
-  valueSpans.canvasScaleX = rCSX.val;
 
-  let rCSY = addRow("Canvas Height Scale");
-  canvasScaleYSlider = createSlider(0.5, 1.5, 1.0, 0.01).parent(rCSY.ctrlWrap);
-  canvasScaleYSlider.style("width:100%");
+  createDiv("Canvas Height Scale (mult)").parent(canvasSec);
+  canvasScaleYSlider = createSlider(0.5, 1.5, 1.0, 0.01).parent(canvasSec).style("width","100%");
   canvasScaleYSlider.input(resizeCanvasFromSliders);
-  valueSpans.canvasScaleY = rCSY.val;
 
-  /* --------------------
-     Circular Array controls (per-layer)
-     -------------------- */
-  const arrRow = addRow("Circular Array Mode (per-layer)");
-  // We'll create the UI elements but their values will be synced to the selected layer
-  circularArrayCheckbox = createCheckbox("Enable Circular Array", false).parent(arrRow.ctrlWrap);
+  createButton("Apply Resize").parent(canvasSec).mousePressed(resizeCanvasFromSliders);
+
+  createDiv("<hr>").parent(uiPanel);
+
+  /* ==========================================================
+     CIRCULAR ARRAY — COLLAPSIBLE, PER-LAYER
+     ========================================================== */
+  const circSec = createCollapsible(uiPanel, "Circular Array (per-layer)", false);
+
+  // enable per-layer circular array
+  circularArrayCheckbox = createCheckbox("Enable Circular Array", false).parent(circSec);
   circularArrayCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
-  const scaleRow = addRow("Array Scale Start (%)");
-  arrayScaleStartSlider = createSlider(1, 400, 100, 1).parent(scaleRow.ctrlWrap);
-  arrayScaleStartSlider.style("width:100%");
+  // Use the layer count slider as the array count (keeps semantics consistent)
+  createDiv("Array Count (uses Shapes count)").parent(circSec);
+  const hint = createDiv("Uses the 'Shapes (count)' value above").parent(circSec).style("font-size:11px;color:#9bd; margin-bottom:6px;");
+
+  createDiv("Array Scale Start (%)").parent(circSec);
+  arrayScaleStartSlider = createSlider(1, 400, 100, 1).parent(circSec).style("width","100%");
   arrayScaleStartSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.arrayScaleStart = scaleRow.val;
 
-  const scaleRow2 = addRow("Array Scale End (%)");
-  arrayScaleEndSlider = createSlider(1, 400, 100, 1).parent(scaleRow2.ctrlWrap);
-  arrayScaleEndSlider.style("width:100%");
+  createDiv("Array Scale End (%)").parent(circSec);
+  arrayScaleEndSlider = createSlider(1, 400, 100, 1).parent(circSec).style("width","100%");
   arrayScaleEndSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.arrayScaleEnd = scaleRow2.val;
 
-  const spreadRow = addRow("Radial Spread (0 = centerLine only → 1 = start→end)");
-  radialSpreadSlider = createSlider(0, 1, 0, 0.01).parent(spreadRow.ctrlWrap);
-  radialSpreadSlider.style("width:100%");
+  createDiv("Radial Spread (0..1)").parent(circSec);
+  radialSpreadSlider = createSlider(0, 1, 0, 0.01).parent(circSec).style("width","100%");
   radialSpreadSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
-  valueSpans.radialSpread = spreadRow.val;
 
-  /* --------------------
-     Export & Reset
-     -------------------- */
-  const btnWrap = createDiv().parent(uiPanel);
-  btnWrap.style("margin-top:12px");
+  createDiv("<hr>").parent(uiPanel);
 
-  const exportBtn = createButton("Export SVG").parent(btnWrap);
-  exportBtn.style(`
-    width:100%;
-    padding:10px;
-    background:#1b1b1b;
-    color:#fff;
-    border:1px solid rgba(255,255,255,0.06);
-  `);
-  exportBtn.mousePressed(() => exportSVG(true)); // high-precision SVG export
+  /* ==========================================================
+     SAMPLE & HOLD — COLLAPSIBLE
+     ========================================================== */
+  const shSec = createCollapsible(uiPanel, "Secondary Sample & Hold", false);
 
-  const resetBtn = createButton("Reset Defaults (selected layer)").parent(btnWrap);
-  resetBtn.style(`
-    width:100%;
-    padding:8px;
-    margin-top:8px;
-    background:#222;
-    color:#fff;
-  `);
-  resetBtn.mousePressed(() => {
-    const l = layers[selectedLayerIndex];
-    const def = createDefaultLayer(l.name);
-    def.color = l.color;
-    layers[selectedLayerIndex] = def;
-    syncUIToLayer();
-    redraw();
-  });
+  sh2EnabledCheckbox = createCheckbox("Enable S&H (secondary)", false).parent(shSec);
+  sh2EnabledCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
-  if (waveMenu.value() !== "square") dutySlider.hide();
+  createDiv("S&H Frequency (cycles per segment)").parent(shSec);
+  sh2FreqSlider = createSlider(0.1, 60, 8, 0.1).parent(shSec).style("width","100%");
+  sh2FreqSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
 
-  // After all controls created, wire up inline editing for each valueSpan
-  setupInlineEditableFields();
+  createDiv("S&H Amplitude").parent(shSec);
+  sh2AmpSlider = createSlider(0, 200, 20, 0.1).parent(shSec).style("width","100%");
+  sh2AmpSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  createDiv("<hr>").parent(uiPanel);
+
+  /* ==========================================================
+     EROSION — COLLAPSIBLE
+     ========================================================== */
+  const erSec = createCollapsible(uiPanel, "Erosion (Perlin)", false);
+
+  erosionEnabledCheckbox = createCheckbox("Enable Erosion", false).parent(erSec);
+  erosionEnabledCheckbox.changed(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  createDiv("Erosion Noise Scale").parent(erSec);
+  erosionScaleSlider = createSlider(0.3, 10, 2.0, 0.01).parent(erSec).style("width","100%");
+  erosionScaleSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  createDiv("Erosion Threshold").parent(erSec);
+  erosionThresholdSlider = createSlider(0.36, 1, 0.5, 0.01).parent(erSec).style("width","100%");
+  erosionThresholdSlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  createDiv("Erosion Decay").parent(erSec);
+  erosionDecaySlider = createSlider(0, 1, 0.5, 0.01).parent(erSec).style("width","100%");
+  erosionDecaySlider.input(() => { updateLayerFromUI(); updateLabelsAndRedraw(); });
+
+  createDiv("<hr>").parent(uiPanel);
+
+  /* ==========================================================
+     EXPORT + RESET
+     ========================================================== */
+  const btnWrap = createDiv().parent(uiPanel).style("margin-top:6px");
+  const exportBtn = createButton("Export SVG").parent(btnWrap).style("width:100%; margin-bottom:6px;");
+  exportBtn.mousePressed(() => exportSVG(true));
+  const exportPngBtn = createButton("Export PNG").parent(btnWrap).style("width:100%; margin-bottom:6px;");
+  exportPngBtn.mousePressed(() => saveCanvas("pattern", "png"));
+
+  const resetBtn = createButton("Reset Selected Layer").parent(btnWrap).style("width:100%; margin-top:8px;");
+  resetBtn.mousePressed(() => { resetDefaults(); });
+
+  // wire inline-editable fields & finish UI wiring if you use those routines
+  if (typeof setupInlineEditableFields === "function") {
+    setupInlineEditableFields();
+  }
+
+  // finally populate layer select & sync UI
+  rebuildLayerList();
+  syncUIToLayer();
 }
-
 /* --------------------
    helpers: rebuild layer select
    -------------------- */
