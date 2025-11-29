@@ -107,6 +107,11 @@
         <h2>Parameters</h2>
 
         <div class="control-group">
+            <label for="globalRotationNum">Global Rotation (°): <input type="number" id="globalRotationNum" min="-179" max="179" step="1" value="0"></label>
+            <input type="range" id="globalRotation" min="-179" max="179" step="1" value="0">
+        </div>
+
+        <div class="control-group">
             <label>Color Gradient:</label>
             <label for="startColor" style="font-weight:normal; font-size: 0.9em;">Start Color (Inner/First):</label>
             <input type="color" id="startColor" value="#FF0000">
@@ -385,6 +390,7 @@
             startSides: document.getElementById('startSides'),
             endSides: document.getElementById('endSides'),
             dutyCycle: document.getElementById('dutyCycle'),
+            globalRotation: document.getElementById('globalRotation'),
 
             drawPathCurve: document.getElementById('drawPathCurve'), 
             waveformRadios: document.querySelectorAll('input[name="waveform"]'),
@@ -392,7 +398,7 @@
             targetRadios: document.querySelectorAll('input[name="modTarget"]'),
             arrayPathRadios: document.querySelectorAll('input[name="arrayPath"]'), 
             spiralTypeRadios: document.querySelectorAll('input[name="spiralType"]'), 
-            gradientModeRadios: document.querySelectorAll('input[name="gradientMode"]'), // NEW
+            gradientModeRadios: document.querySelectorAll('input[name="gradientMode"]'), 
             radialControls: document.getElementById('radialControls'),
             concentricControls: document.getElementById('concentricControls'),
             arrayRadiusGroup: document.getElementById('arrayRadiusGroup'),
@@ -442,6 +448,7 @@
         linkInputs('distLog', 'distLogNum');
         linkInputs('concentricAngleOffset', 'concentricAngleOffsetNum');
         linkInputs('angleOffsetLog', 'angleOffsetLogNum');
+        linkInputs('globalRotation', 'globalRotationNum');
 
         const waveforms = {
             sine: (t, phase) => Math.sin(t + phase),
@@ -496,7 +503,8 @@
             endSides: parseInt(controls.endSides.value),
             angleOffsetMode: 'rotateShapes', 
             dutyCycle: parseFloat(controls.dutyCycle.value),
-            gradientMode: 'angular', // New State
+            gradientMode: 'angular', 
+            globalRotation: parseInt(controls.globalRotation.value),
         };
 
         function hexToRgb(hex) {
@@ -531,6 +539,22 @@
             let t = (total > 1) ? i / (total - 1) : 0;
             
             if (state.layoutMode === 'concentric') {
+                // FIXED INTERPOLATION FOR VISUAL BALANCE
+                // If distLog < 1.0 (shape clustering at edges), the gap between shape 0 and 1 is naturally massive.
+                // We visually correct this by pulling the center shape (index 0) closer to index 1.
+                if (i === 0 && state.distLog < 1.0 && total > 1) {
+                    // Calculate where index 1 sits
+                    let t_next = 1 / (total - 1);
+                    let scaled_t_next = applyLogScale(t_next, state.distLog);
+                    let r_next = state.startRadius + range * scaled_t_next;
+                    
+                    // Closure factor: how much to pull index 0 towards index 1
+                    let closure = 1.0 - state.distLog; 
+                    let adj = closure * 0.9; // Keep 10% separation
+                    
+                    return state.startRadius + (r_next - state.startRadius) * adj;
+                }
+
                 const scaled_t_radius = applyLogScale(t, state.distLog);
                 return state.startRadius + range * scaled_t_radius;
             } else {
@@ -777,7 +801,6 @@
                     grad.addColorStop(1, state.endColor);
                     strokeStyle = grad;
 
-                    // SVG Gradient Definition
                     if (svgDefs) {
                         const gradId = `grad_${i}`;
                         const def = `<linearGradient id="${gradId}" x1="${startPt.x.toFixed(2)}" y1="${startPt.y.toFixed(2)}" x2="${endPt.x.toFixed(2)}" y2="${endPt.y.toFixed(2)}" gradientUnits="userSpaceOnUse">
@@ -798,7 +821,6 @@
                     for (let p = 1; p < points.length; p++) {
                         pathData += ` L ${points[p].x.toFixed(2)} ${points[p].y.toFixed(2)}`;
                     }
-                    // If we are in Radial mode, svgStroke is url(#grad_i), else it's an rgb string
                     const svgPath = `<path d="${pathData}" stroke="${svgStroke}" stroke-width="${lineWidth.toFixed(2)}" fill="none" vector-effect="non-scaling-stroke"/>`;
                     svgData.push(svgPath);
                 }
@@ -998,6 +1020,7 @@
 
         function draw(exporting = false) {
             if (!exporting) {
+                // Clear and fill bg
                 ctx.fillStyle = '#000';
                 ctx.fillRect(0, 0, W, H);
             }
@@ -1006,13 +1029,23 @@
 
             if (state.selectedWaveform === 'samplehold') waveforms._sampleValues = {};
             
+            // --- GLOBAL ROTATION TRANSFORM ---
+            // For Canvas:
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(state.globalRotation * Math.PI / 180);
+            ctx.translate(-centerX, -centerY);
+
             if (state.layoutMode === 'radiating') {
-                drawRadiatingLines(svgElements, svgDefs); // Pass defs array for gradients
+                drawRadiatingLines(svgElements, svgDefs); 
             } else if (state.layoutMode === 'radial') {
                 drawRadialArray(svgElements);
             } else {
                 drawConcentricShapes(svgElements);
             }
+            
+            // Restore context for next frame
+            ctx.restore();
             
             return { elements: svgElements, defs: svgDefs };
         }
@@ -1065,12 +1098,13 @@
             state.arrayPath = document.querySelector('input[name="arrayPath"]:checked')?.value || 'radial'; 
             state.spiralType = document.querySelector('input[name="spiralType"]:checked')?.value || 'fermat'; 
             state.angleOffsetMode = document.querySelector('input[name="angleOffsetMode"]:checked').value;
-            state.gradientMode = document.querySelector('input[name="gradientMode"]:checked').value; // New State
+            state.gradientMode = document.querySelector('input[name="gradientMode"]:checked').value; 
             state.startBaseRadius = parseFloat(controls.startBaseRadius.value);
             state.endBaseRadius = parseFloat(controls.endBaseRadius.value);
             state.startSides = newStartSides; 
             state.endSides = newEndSides;     
             state.dutyCycle = parseFloat(controls.dutyCycle.value);
+            state.globalRotation = parseInt(controls.globalRotation.value);
 
             if (controls.startSidesLabelSpan) controls.startSidesLabelSpan.textContent = formatSideValue(state.startSides);
             if (controls.endSidesLabelSpan) controls.endSidesLabelSpan.textContent = formatSideValue(state.endSides);
@@ -1174,13 +1208,18 @@
             const svgElements = result.elements;
             const svgDefs = result.defs ? result.defs.join('\n') : '';
 
+            // Apply Global Rotation to the group wrapper
+            const transform = `rotate(${state.globalRotation}, ${centerX}, ${centerY})`;
+
             const svgString = `
 <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
     <defs>
         ${svgDefs}
     </defs>
     <rect width="100%" height="100%" fill="#000"/>
-    ${svgElements.join('\n    ')}
+    <g transform="${transform}">
+        ${svgElements.join('\n    ')}
+    </g>
 </svg>`.trim();
 
             const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
@@ -1201,7 +1240,7 @@
         controls.arrayPathRadios.forEach(radio => radio.addEventListener('change', handleArrayPathChange)); 
         controls.spiralTypeRadios.forEach(radio => radio.addEventListener('change', handleSpiralTypeChange)); 
         controls.angleOffsetModeRadios.forEach(radio => radio.addEventListener('change', handleAngleOffsetModeChange));
-        controls.gradientModeRadios.forEach(radio => radio.addEventListener('change', updateState)); // NEW
+        controls.gradientModeRadios.forEach(radio => radio.addEventListener('change', updateState)); 
         controls.waveformRadios.forEach(radio => radio.addEventListener('change', updateState));
 
         controls.numSpirals.addEventListener('input', updateState); 
@@ -1233,12 +1272,12 @@
         controls.phase.value = 0.00;
         controls.startAmp.value = 0; 
         controls.endAmp.value = 20; 
-        controls.concentricCount.value = 6; 
-        controls.distLog.value = 1.0; 
-        controls.concentricAngleOffset.value = 0.00; 
+        controls.concentricCount.value = 60; 
+        controls.distLog.value = 0.2; // Show off the fix
+        controls.concentricAngleOffset.value = 0.06; 
         controls.angleOffsetLog.value = 1.00; 
         
-        controls.startRadius.value = 50; 
+        controls.startRadius.value = 20; 
         controls.endRadius.value = 350; 
         
         controls.startBaseRadius.value = 50; 
@@ -1247,8 +1286,8 @@
         controls.startLineWidth.value = 0.5;
         controls.endLineWidth.value = 0.5;
         
-        controls.startSides.value = 6; 
-        controls.endSides.value = 5;   
+        controls.startSides.value = 0; 
+        controls.endSides.value = 4;   
         controls.count.value = 80;
 
         document.getElementById('pathFibonacci').checked = true;
