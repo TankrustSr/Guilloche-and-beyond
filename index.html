@@ -19,17 +19,22 @@
             background-color: #ffffff;
             box-shadow: 2px 0 5px rgba(0,0,0,0.1);
             overflow-y: auto;
+            z-index: 10;
         }
         #canvasContainer {
             flex-grow: 1;
             display: flex;
             justify-content: center;
             align-items: center;
-            background-color: #222;
+            background-color: #000;
+            overflow: hidden;
+            perspective: 1000px;
         }
         canvas {
-            border: 1px solid #000;
-            background-color: #000;
+            background-color: transparent; 
+            box-shadow: 0 0 50px rgba(255, 255, 255, 0.1);
+            transition: transform 0.1s linear;
+            transform-style: preserve-3d;
         }
         .control-group {
             margin-bottom: 20px;
@@ -99,6 +104,21 @@
             color: #666;
             margin-left: 2px;
         }
+        #viewControls {
+            border-color: #2196F3;
+            background-color: #f0f8ff;
+        }
+        .seed-btn {
+            background-color: #eee;
+            border: 1px solid #ccc;
+            padding: 5px 10px;
+            cursor: pointer;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        .seed-btn:hover {
+            background-color: #ddd;
+        }
     </style>
 </head>
 <body>
@@ -106,8 +126,20 @@
     <div id="controls">
         <h2>Parameters</h2>
 
+        <div class="control-group" id="viewControls">
+            <label>3D Canvas Orientation:</label>
+            <label for="tiltXNum" style="font-weight:normal; margin-top:5px;">Tilt (X-Axis): <input type="number" id="tiltXNum" min="-85" max="85" step="1" value="0"></label>
+            <input type="range" id="tiltX" min="-85" max="85" step="1" value="0">
+
+            <label for="panYNum" style="font-weight:normal; margin-top:5px;">Pan (Y-Axis): <input type="number" id="panYNum" min="-85" max="85" step="1" value="0"></label>
+            <input type="range" id="panY" min="-85" max="85" step="1" value="0">
+            
+            <label for="perspectiveNum" style="font-weight:normal; margin-top:5px;">Perspective: <input type="number" id="perspectiveNum" min="200" max="2000" step="10" value="1000"></label>
+            <input type="range" id="perspective" min="200" max="2000" step="10" value="1000">
+        </div>
+
         <div class="control-group">
-            <label for="globalRotationNum">Global Rotation (°): <input type="number" id="globalRotationNum" min="-179" max="179" step="1" value="0"></label>
+            <label for="globalRotationNum">Global Rotation (Z-Axis): <input type="number" id="globalRotationNum" min="-179" max="179" step="1" value="0"></label>
             <input type="range" id="globalRotation" min="-179" max="179" step="1" value="0">
         </div>
 
@@ -121,7 +153,7 @@
         </div>
 
         <div class="control-group">
-            <label>Gradient Direction (Lines):</label>
+            <label>Gradient Direction:</label>
             <div class="radio-group">
                 <input type="radio" id="gradAngular" name="gradientMode" value="angular" checked>
                 <label for="gradAngular">Angular (Clockwise)</label>
@@ -130,12 +162,17 @@
             </div>
         </div>
 
+        <div class="control-group" id="gradientCyclesGroup">
+            <label for="gradientDivisionsNum">Gradient Cycles (360°): <input type="number" id="gradientDivisionsNum" min="1" max="36" step="1" value="1"></label>
+            <input type="range" id="gradientDivisions" min="1" max="36" step="1" value="1">
+        </div>
+
         <div class="control-group">
-            <label for="startLineWidthNum">Start Line Width: <input type="number" id="startLineWidthNum" min="0.1" max="20" step="0.1" value="0.5"></label>
-            <input type="range" id="startLineWidth" min="0.1" max="20" step="0.1" value="0.5">
+            <label for="startLineWidthNum">Start Line Width: <input type="number" id="startLineWidthNum" min="0.1" max="50" step="0.1" value="0.5"></label>
+            <input type="range" id="startLineWidth" min="0.1" max="50" step="0.1" value="0.5">
             
-            <label for="endLineWidthNum">End Line Width: <input type="number" id="endLineWidthNum" min="0.1" max="20" step="0.1" value="0.5"></label>
-            <input type="range" id="endLineWidth" min="0.1" max="20" step="0.1" value="0.5">
+            <label for="endLineWidthNum">End Line Width: <input type="number" id="endLineWidthNum" min="0.1" max="50" step="0.1" value="0.5"></label>
+            <input type="range" id="endLineWidth" min="0.1" max="50" step="0.1" value="0.5">
         </div>
 
         <div class="control-group" id="baseRadiusGroup">
@@ -160,6 +197,55 @@
             </div>
         </div>
         
+        <div class="control-group hidden" id="randomLengthGroup" style="border-color: #9C27B0; background-color: #fdf5ff;">
+            <label>Radiating Line Lengths:</label>
+            <div class="radio-group" style="display: flex; flex-direction: column; gap: 5px;">
+                <div>
+                    <input type="radio" id="randNone" name="randomLengthMode" value="none" checked>
+                    <label for="randNone">Uniform</label>
+                </div>
+                <div>
+                    <input type="radio" id="randStart" name="randomLengthMode" value="start">
+                    <label for="randStart">Random Start</label>
+                </div>
+                <div>
+                    <input type="radio" id="randEnd" name="randomLengthMode" value="end">
+                    <label for="randEnd">Random End</label>
+                </div>
+                <div>
+                    <input type="radio" id="randBoth" name="randomLengthMode" value="both">
+                    <label for="randBoth">Random Both</label>
+                </div>
+            </div>
+            <div style="margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+                <label style="margin: 0; font-weight: normal;">Random Seed: <span id="seedDisplay" style="font-weight: bold; margin-left:5px;">1</span></label>
+                <div>
+                    <button class="seed-btn" id="seedDec">&lt;</button>
+                    <button class="seed-btn" id="seedInc">&gt;</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="control-group hidden" id="radialAngleGroup">
+            <label>Array Angle Range:</label>
+            
+            <label for="arrayStartAngleNum" style="font-weight:normal; margin-top:5px;">Start Angle (°): <input type="number" id="arrayStartAngleNum" min="0" max="360" step="1" value="0"></label>
+            <input type="range" id="arrayStartAngle" min="0" max="360" step="1" value="0">
+
+            <label for="arrayEndAngleNum" style="font-weight:normal; margin-top:5px;">End Angle (°): <input type="number" id="arrayEndAngleNum" min="0" max="360" step="1" value="360"></label>
+            <input type="range" id="arrayEndAngle" min="0" max="360" step="1" value="360">
+        </div>
+
+        <div class="control-group hidden" id="radialShapeRotGroup">
+            <label>Shape Orientation (Z-Axis):</label>
+            
+            <label for="radialRotStartNum" style="font-weight:normal; margin-top:5px;">Start Rotation (°): <input type="number" id="radialRotStartNum" min="-720" max="720" step="1" value="90"></label>
+            <input type="range" id="radialRotStart" min="-720" max="720" step="1" value="90">
+
+            <label for="radialRotEndNum" style="font-weight:normal; margin-top:5px;">End Rotation (°): <input type="number" id="radialRotEndNum" min="-720" max="720" step="1" value="450"></label>
+            <input type="range" id="radialRotEnd" min="-720" max="720" step="1" value="450">
+        </div>
+
         <div class="control-group" id="modTargetGroup">
             <label>Modulation Target:</label>
             <div class="radio-group">
@@ -167,6 +253,18 @@
                 <label for="targetSize">Shape Size</label>
                 <input type="radio" id="targetOutline" name="modTarget" value="outline" checked>
                 <label for="targetOutline">Shape Outline</label>
+            </div>
+        </div>
+        
+        <div class="control-group" id="shapeMorphGroup">
+            <label id="shapeMorphLabel">Shape Morphing:</label>
+            <div class="morph-control">
+                <label for="startSidesNum">Start Sides (<span id="startSidesLabel">Circle</span>): <input type="number" id="startSidesNum" min="0" max="60" step="1" value="0"></label>
+                <input type="range" id="startSides" min="0" max="60" step="1" value="0">
+            </div>
+            <div class="morph-control">
+                <label for="endSidesNum">End Sides (<span id="endSidesLabel">Circle</span>): <input type="number" id="endSidesNum" min="0" max="60" step="1" value="0"></label>
+                <input type="range" id="endSides" min="0" max="60" step="1" value="0">
             </div>
         </div>
 
@@ -277,16 +375,6 @@
 
         <div class="control-group" id="concentricControls">
             
-            <label id="shapeMorphLabel">Shape Morphing:</label>
-            <div class="morph-control">
-                <label for="startSidesNum">Start Sides (<span id="startSidesLabel">Circle</span>): <input type="number" id="startSidesNum" min="0" max="60" step="1" value="0"></label>
-                <input type="range" id="startSides" min="0" max="60" step="1" value="0">
-            </div>
-            <div class="morph-control">
-                <label for="endSidesNum">End Sides (<span id="endSidesLabel">Circle</span>): <input type="number" id="endSidesNum" min="0" max="60" step="1" value="0"></label>
-                <input type="range" id="endSides" min="0" max="60" step="1" value="0">
-            </div>
-
             <div id="concentricCountGroup">
                 <label for="concentricCountNum">Shape Count: <input type="number" id="concentricCountNum" min="5" max="200" step="1" value="50"></label>
                 <input type="range" id="concentricCount" min="5" max="200" step="1" value="50">
@@ -324,6 +412,7 @@
 
     <script>
         const canvas = document.getElementById('artCanvas');
+        const container = document.getElementById('canvasContainer');
         const ctx = canvas.getContext('2d');
         const W = canvas.width;
         const H = canvas.height;
@@ -339,7 +428,6 @@
         const MAX_POLYGON_SIDES = 60;
         const RADIATING_LINE_SEGMENTS = 200; 
 
-        // -- HELPER: Link Range Input with Number Input --
         function linkInputs(rangeId, numberId) {
             const range = document.getElementById(rangeId);
             const number = document.getElementById(numberId);
@@ -367,6 +455,10 @@
             startColor: document.getElementById('startColor'),
             endColor: document.getElementById('endColor'),
             
+            tiltX: document.getElementById('tiltX'),
+            panY: document.getElementById('panY'),
+            perspective: document.getElementById('perspective'),
+
             freq: document.getElementById('freq'),
             phase: document.getElementById('phase'),
             startAmp: document.getElementById('startAmp'),
@@ -391,6 +483,7 @@
             endSides: document.getElementById('endSides'),
             dutyCycle: document.getElementById('dutyCycle'),
             globalRotation: document.getElementById('globalRotation'),
+            gradientDivisions: document.getElementById('gradientDivisions'), 
 
             drawPathCurve: document.getElementById('drawPathCurve'), 
             waveformRadios: document.querySelectorAll('input[name="waveform"]'),
@@ -418,13 +511,28 @@
             rotationModeGroup: document.getElementById('rotationModeGroup'),
             concentricCountGroup: document.getElementById('concentricCountGroup'),
             dutyCycleGroup: document.getElementById('dutyCycleGroup'),
+            gradientCyclesGroup: document.getElementById('gradientCyclesGroup'),
+            randomLengthGroup: document.getElementById('randomLengthGroup'), 
+            randomLengthRadios: document.querySelectorAll('input[name="randomLengthMode"]'),
+            seedDisplay: document.getElementById('seedDisplay'), 
+            seedInc: document.getElementById('seedInc'), 
+            seedDec: document.getElementById('seedDec'), 
+            shapeMorphGroup: document.getElementById('shapeMorphGroup'),
+            radialAngleGroup: document.getElementById('radialAngleGroup'),
+            arrayStartAngle: document.getElementById('arrayStartAngle'),
+            arrayEndAngle: document.getElementById('arrayEndAngle'),
+            radialShapeRotGroup: document.getElementById('radialShapeRotGroup'), // NEW
+            radialRotStart: document.getElementById('radialRotStart'), // NEW
+            radialRotEnd: document.getElementById('radialRotEnd'), // NEW
         };
         
         const startRadiusLabelText = document.getElementById('startRadiusLabelText');
         const endRadiusLabelText = document.getElementById('endRadiusLabelText');
         const twistLabel = document.getElementById('twistLabel');
 
-        // Link all inputs
+        linkInputs('tiltX', 'tiltXNum');
+        linkInputs('panY', 'panYNum');
+        linkInputs('perspective', 'perspectiveNum');
         linkInputs('startLineWidth', 'startLineWidthNum');
         linkInputs('endLineWidth', 'endLineWidthNum');
         linkInputs('startRadius', 'startRadiusNum');
@@ -449,6 +557,11 @@
         linkInputs('concentricAngleOffset', 'concentricAngleOffsetNum');
         linkInputs('angleOffsetLog', 'angleOffsetLogNum');
         linkInputs('globalRotation', 'globalRotationNum');
+        linkInputs('gradientDivisions', 'gradientDivisionsNum'); 
+        linkInputs('arrayStartAngle', 'arrayStartAngleNum');
+        linkInputs('arrayEndAngle', 'arrayEndAngleNum'); 
+        linkInputs('radialRotStart', 'radialRotStartNum'); // NEW
+        linkInputs('radialRotEnd', 'radialRotEndNum'); // NEW
 
         const waveforms = {
             sine: (t, phase) => Math.sin(t + phase),
@@ -470,9 +583,20 @@
             }
         };
 
+        // Seeded Random Helper
+        function seededRandom(seed) {
+            let t = seed += 0x6D2B79F5;
+            t = Math.imul(t ^ t >>> 15, t | 1);
+            t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+            return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        }
+
         let state = {
             startColor: controls.startColor.value,
             endColor: controls.endColor.value,
+            tiltX: parseInt(controls.tiltX.value),
+            panY: parseInt(controls.panY.value),
+            perspective: parseInt(controls.perspective.value),
             freq: parseInt(controls.freq.value),
             phase: parseFloat(controls.phase.value),
             startAmp: parseFloat(controls.startAmp.value),
@@ -505,6 +629,13 @@
             dutyCycle: parseFloat(controls.dutyCycle.value),
             gradientMode: 'angular', 
             globalRotation: parseInt(controls.globalRotation.value),
+            gradientDivisions: parseInt(controls.gradientDivisions.value),
+            randomLengthMode: 'none', 
+            seed: 1, 
+            arrayStartAngle: parseInt(controls.arrayStartAngle.value), 
+            arrayEndAngle: parseInt(controls.arrayEndAngle.value),
+            radialRotStart: parseInt(controls.radialRotStart.value), // NEW
+            radialRotEnd: parseInt(controls.radialRotEnd.value), // NEW
         };
 
         function hexToRgb(hex) {
@@ -539,22 +670,14 @@
             let t = (total > 1) ? i / (total - 1) : 0;
             
             if (state.layoutMode === 'concentric') {
-                // FIXED INTERPOLATION FOR VISUAL BALANCE
-                // If distLog < 1.0 (shape clustering at edges), the gap between shape 0 and 1 is naturally massive.
-                // We visually correct this by pulling the center shape (index 0) closer to index 1.
                 if (i === 0 && state.distLog < 1.0 && total > 1) {
-                    // Calculate where index 1 sits
                     let t_next = 1 / (total - 1);
                     let scaled_t_next = applyLogScale(t_next, state.distLog);
                     let r_next = state.startRadius + range * scaled_t_next;
-                    
-                    // Closure factor: how much to pull index 0 towards index 1
                     let closure = 1.0 - state.distLog; 
-                    let adj = closure * 0.9; // Keep 10% separation
-                    
+                    let adj = closure * 0.9; 
                     return state.startRadius + (r_next - state.startRadius) * adj;
                 }
-
                 const scaled_t_radius = applyLogScale(t, state.distLog);
                 return state.startRadius + range * scaled_t_radius;
             } else {
@@ -577,7 +700,16 @@
         function getInterpolatedColor(i, total) {
             const c1 = hexToRgb(state.startColor);
             const c2 = hexToRgb(state.endColor);
-            const t = (total > 1) ? i / (total - 1) : 0;
+            
+            let t = (total > 1) ? i / (total - 1) : 0;
+            let scaledT = t * state.gradientDivisions;
+
+            if (scaledT > 0 && scaledT % 1 === 0) {
+                t = 1;
+            } else {
+                t = scaledT % 1;
+            }
+            
             return lerpColor(c1, c2, t);
         }
 
@@ -736,20 +868,43 @@
             const N = state.count;
             if (N < 1) return;
 
-            const R_inner = state.startRadius;
-            const R_outer = state.endRadius;
-            const range = R_outer - R_inner;
-            const phaseRad = state.phase * Math.PI;
+            const globalStartR = state.startRadius;
+            const globalEndR = state.endRadius;
             
+            const phaseRad = state.phase * Math.PI;
             const maxTwist = state.concentricAngleOffset * Math.PI * 4; 
             
             for (let i = 0; i < N; i++) {
-                const baseAngle = (i / N) * Math.PI * 2;
                 
-                const lineWidth = getInterpolatedLineWidth(i, N);
+                // RANDOM LENGTH CALCULATION with SEED
+                let R_inner = globalStartR;
+                let R_outer = globalEndR;
+                
+                const seedMix = i * 1337 + state.seed * 7919; 
+                const r1 = seededRandom(seedMix); 
+                const r2 = seededRandom(seedMix + 9999);
+
+                if (state.randomLengthMode === 'start') {
+                    R_inner = globalStartR + r1 * (globalEndR - globalStartR);
+                    if(R_inner > R_outer) R_inner = R_outer - 1; 
+
+                } else if (state.randomLengthMode === 'end') {
+                    R_outer = globalStartR + r1 * (globalEndR - globalStartR);
+                    if(R_outer < R_inner) R_outer = R_inner + 1;
+
+                } else if (state.randomLengthMode === 'both') {
+                    let p1 = globalStartR + r1 * (globalEndR - globalStartR);
+                    let p2 = globalStartR + r2 * (globalEndR - globalStartR);
+                    R_inner = Math.min(p1, p2);
+                    R_outer = Math.max(p1, p2);
+                    if (R_outer - R_inner < 1) R_outer = R_inner + 5; 
+                }
+
+                const range = R_outer - R_inner;
+                const baseAngle = (i / N) * Math.PI * 2;
                 const waveFn = waveforms[state.selectedWaveform];
 
-                let points = [];
+                let spinePoints = [];
                 const segments = RADIATING_LINE_SEGMENTS;
                 
                 for(let j = 0; j <= segments; j++) {
@@ -757,7 +912,6 @@
                     const currentR = R_inner + (t * range);
                     const twistAngle = t * maxTwist;
 
-                    // AMPLITUDE MODULATION
                     let t_amp_curve = t;
                     if (state.ampLog !== 1.0) t_amp_curve = Math.pow(t, state.ampLog);
                     const currentSegmentAmp = state.startAmp + (state.endAmp - state.startAmp) * t_amp_curve;
@@ -773,61 +927,103 @@
                     const finalAngle = baseAngle + twistAngle + angleDisplacement;
                     const x = centerX + Math.cos(finalAngle) * currentR;
                     const y = centerY + Math.sin(finalAngle) * currentR;
-                    points.push({x, y});
+                    
+                    const currentWidth = state.startLineWidth + (state.endLineWidth - state.startLineWidth) * t;
+                    spinePoints.push({x, y, w: currentWidth});
                 }
                 
-                ctx.beginPath();
-                if (points.length > 0) {
-                    ctx.moveTo(points[0].x, points[0].y);
-                    for (let p = 1; p < points.length; p++) {
-                        ctx.lineTo(points[p].x, points[p].y);
+                let leftEdge = [];
+                let rightEdge = [];
+
+                for (let k = 0; k < spinePoints.length; k++) {
+                    const curr = spinePoints[k];
+                    let next = spinePoints[k + 1];
+                    let prev = spinePoints[k - 1];
+
+                    let dx, dy;
+                    if (k === 0) {
+                        dx = next.x - curr.x;
+                        dy = next.y - curr.y;
+                    } else if (k === spinePoints.length - 1) {
+                        dx = curr.x - prev.x;
+                        dy = curr.y - prev.y;
+                    } else {
+                        dx = next.x - prev.x;
+                        dy = next.y - prev.y;
                     }
+
+                    const len = Math.sqrt(dx*dx + dy*dy);
+                    if (len === 0) continue; 
+                    const ndx = dx / len;
+                    const ndy = dy / len;
+
+                    const perpX = -ndy;
+                    const perpY = ndx;
+
+                    const halfW = curr.w / 2;
+                    
+                    leftEdge.push({
+                        x: curr.x + perpX * halfW,
+                        y: curr.y + perpY * halfW
+                    });
+                    
+                    rightEdge.push({
+                        x: curr.x - perpX * halfW,
+                        y: curr.y - perpY * halfW
+                    });
                 }
 
-                // --- COLOR LOGIC ---
-                let strokeStyle;
-                let svgStroke;
+                const fullPoly = [...leftEdge, ...rightEdge.reverse()];
+
+                ctx.beginPath();
+                if (fullPoly.length > 0) {
+                    ctx.moveTo(fullPoly[0].x, fullPoly[0].y);
+                    for (let p = 1; p < fullPoly.length; p++) {
+                        ctx.lineTo(fullPoly[p].x, fullPoly[p].y);
+                    }
+                }
+                ctx.closePath(); 
+
+                let fillStyle;
+                let svgFill;
 
                 if (state.gradientMode === 'angular') {
-                    // Classic mode: Index based color
-                    strokeStyle = getInterpolatedColor(i, N);
-                    svgStroke = strokeStyle;
+                    fillStyle = getInterpolatedColor(i, N);
+                    svgFill = fillStyle;
                 } else {
-                    // Radial Mode: Lengthwise Gradient
-                    const startPt = points[0];
-                    const endPt = points[points.length - 1];
+                    const startPt = spinePoints[0];
+                    const endPt = spinePoints[spinePoints.length - 1];
                     const grad = ctx.createLinearGradient(startPt.x, startPt.y, endPt.x, endPt.y);
                     grad.addColorStop(0, state.startColor);
                     grad.addColorStop(1, state.endColor);
-                    strokeStyle = grad;
+                    fillStyle = grad;
 
                     if (svgDefs) {
-                        const gradId = `grad_${i}`;
+                        const gradId = `grad_poly_${i}`;
                         const def = `<linearGradient id="${gradId}" x1="${startPt.x.toFixed(2)}" y1="${startPt.y.toFixed(2)}" x2="${endPt.x.toFixed(2)}" y2="${endPt.y.toFixed(2)}" gradientUnits="userSpaceOnUse">
                             <stop offset="0%" stop-color="${state.startColor}" />
                             <stop offset="100%" stop-color="${state.endColor}" />
                         </linearGradient>`;
                         svgDefs.push(def);
-                        svgStroke = `url(#${gradId})`;
+                        svgFill = `url(#${gradId})`;
                     }
                 }
 
-                ctx.strokeStyle = strokeStyle;
-                ctx.lineWidth = lineWidth;
-                ctx.stroke();
+                ctx.fillStyle = fillStyle;
+                ctx.fill();
 
-                if (svgData && points.length > 1) {
-                    let pathData = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
-                    for (let p = 1; p < points.length; p++) {
-                        pathData += ` L ${points[p].x.toFixed(2)} ${points[p].y.toFixed(2)}`;
+                if (svgData && fullPoly.length > 1) {
+                    let pathData = `M ${fullPoly[0].x.toFixed(2)} ${fullPoly[0].y.toFixed(2)}`;
+                    for (let p = 1; p < fullPoly.length; p++) {
+                        pathData += ` L ${fullPoly[p].x.toFixed(2)} ${fullPoly[p].y.toFixed(2)}`;
                     }
-                    const svgPath = `<path d="${pathData}" stroke="${svgStroke}" stroke-width="${lineWidth.toFixed(2)}" fill="none" vector-effect="non-scaling-stroke"/>`;
+                    pathData += " Z"; 
+                    const svgPath = `<path d="${pathData}" fill="${svgFill}" stroke="none"/>`;
                     svgData.push(svgPath);
                 }
             }
         }
         
-        // ... (Fermat/Spiral functions remain same) ...
         function calculateSpiralAngle(i, N, totalSpirals, maxSpiralAngle, spiralOffset, s) {
             if (state.spiralType === 'fermat') {
                 const t_linear = N > 0 ? (i + 1) / N : 0; 
@@ -890,6 +1086,7 @@
             }
         }
 
+        // --- UPDATED DRAW RADIAL ARRAY ---
         function drawRadialArray(svgData) {
             const phaseRad = state.phase * Math.PI;
             const N = state.count; 
@@ -904,31 +1101,28 @@
 
             const R_first = calculateShapeRadius(0, N); 
             const R_last = calculateShapeRadius(N - 1, N);
-
-            let centerRadii_RadialEqual = [];
-            let currentCenterR = R_first;
-            centerRadii_RadialEqual.push(R_first); 
-
-            for (let i = 1; i < N; i++) {
-                const R_prev = calculateShapeRadius(i - 1, N); 
-                const R_curr = calculateShapeRadius(i, N);
-                currentCenterR += (R_prev + R_curr);
-                centerRadii_RadialEqual.push(currentCenterR);
-            }
-            let totalRequiredRadialDistance = currentCenterR; 
-            
             const R_max_center_boundary = state.arrayRadius - R_last;
-            const scaleFactor = totalRequiredRadialDistance > 0 ? R_max_center_boundary / totalRequiredRadialDistance : 0;
+            
+            // CONVERT DEGREES TO RADIANS FOR START/END
+            const startAngleRad = state.arrayStartAngle * (Math.PI / 180);
+            const endAngleRad = state.arrayEndAngle * (Math.PI / 180);
+            const totalAngleRange = endAngleRad - startAngleRad;
+            
+            // CONVERT DEGREES TO RADIANS FOR SHAPE ROTATION
+            const shapeRotStartRad = state.radialRotStart * (Math.PI / 180);
+            const shapeRotEndRad = state.radialRotEnd * (Math.PI / 180);
 
             for (let s = 0; s < totalSpirals; s++) { 
                 for (let i = 0; i < N; i++) { 
                     let angle;
                     let radius;
+                    let t = (N > 1) ? i / (N - 1) : 0; 
+                    if (N === 1) t = 0;
                     
                     const currentBaseRadius = getInterpolatedBaseRadius(i, N); 
                     const currentAmp = getInterpolatedAmplitude(i, N); 
                     const currentLineWidth = getInterpolatedLineWidth(i, N); 
-                    const currentColor = getInterpolatedColor(i, N);
+                    const currentColor = getInterpolatedColor(i, N); 
                     const modInput = i * state.freq;
                     const interpolatedSides = getInterpolatedSides(i, N); 
                     
@@ -937,17 +1131,24 @@
                         const spiralOffset = s * (Math.PI * 2 / totalSpirals);
                         angle = calculateSpiralAngle(i, N, totalSpirals, maxSpiralAngle, spiralOffset, s);
                     } else { 
-                        radius = centerRadii_RadialEqual[i] * scaleFactor; 
-                        const t = (i + 1) / N; 
-                        angle = t * Math.PI * 2;
+                        radius = state.arrayRadius; 
+                        angle = startAngleRad + t * totalAngleRange;
                     }
 
                     const x = centerX + Math.cos(angle) * radius; 
                     const y = centerY + Math.sin(angle) * radius;
                     const center = { x, y };
                     
+                    // INTERPOLATED SHAPE ROTATION (Replaces automatic tangent logic)
+                    // If you want tangential behavior (perpendicular to radius):
+                    // Set StartRot to 90 deg (if startAngle 0) and EndRot to 360+90 deg
+                    let shapeRotation = 0;
+                    if (state.arrayPath === 'radial') {
+                        shapeRotation = shapeRotStartRad + t * (shapeRotEndRad - shapeRotStartRad);
+                    }
+
                     if (state.modTarget === 'outline') {
-                        drawDistortedShape(center, currentBaseRadius, currentAmp, currentLineWidth, currentColor, interpolatedSides, svgData, 0); 
+                        drawDistortedShape(center, currentBaseRadius, currentAmp, currentLineWidth, currentColor, interpolatedSides, svgData, shapeRotation); 
                     } else { 
                         const modValue = waveforms[state.selectedWaveform](modInput, phaseRad); 
                         const currentRadius = currentBaseRadius + modValue * currentAmp; 
@@ -971,10 +1172,8 @@
             
             for (let i = 0; i < totalCount; i++) {
                 let t_index = (totalCount > 1) ? i / (totalCount - 1) : 0;
-                
                 const t_log_angle = applyLogScale(t_index, state.angleOffsetLog);
                 const progressiveOffset = totalCount * t_log_angle * angleOffsetPerCircle;
-
                 const currentShapeBaseR = getInterpolatedBaseRadius(i, totalCount);
                 
                 let currentCenterR = 0;
@@ -1020,17 +1219,19 @@
 
         function draw(exporting = false) {
             if (!exporting) {
-                // Clear and fill bg
+                container.style.perspective = `${state.perspective}px`;
+                canvas.style.transform = `rotateX(${state.tiltX}deg) rotateY(${state.panY}deg)`;
+                ctx.clearRect(0, 0, W, H);
+            } else {
                 ctx.fillStyle = '#000';
                 ctx.fillRect(0, 0, W, H);
             }
+
             let svgElements = exporting ? [] : null;
             let svgDefs = exporting ? [] : null;
 
             if (state.selectedWaveform === 'samplehold') waveforms._sampleValues = {};
             
-            // --- GLOBAL ROTATION TRANSFORM ---
-            // For Canvas:
             ctx.save();
             ctx.translate(centerX, centerY);
             ctx.rotate(state.globalRotation * Math.PI / 180);
@@ -1044,7 +1245,6 @@
                 drawConcentricShapes(svgElements);
             }
             
-            // Restore context for next frame
             ctx.restore();
             
             return { elements: svgElements, defs: svgDefs };
@@ -1073,6 +1273,9 @@
 
             state.startColor = controls.startColor.value;
             state.endColor = controls.endColor.value;
+            state.tiltX = parseInt(controls.tiltX.value);
+            state.panY = parseInt(controls.panY.value);
+            state.perspective = parseInt(controls.perspective.value);
             state.freq = parseInt(controls.freq.value);
             state.phase = parseFloat(controls.phase.value);
             state.startAmp = parseFloat(controls.startAmp.value);
@@ -1105,15 +1308,26 @@
             state.endSides = newEndSides;     
             state.dutyCycle = parseFloat(controls.dutyCycle.value);
             state.globalRotation = parseInt(controls.globalRotation.value);
+            state.gradientDivisions = parseInt(controls.gradientDivisions.value);
+            state.randomLengthMode = document.querySelector('input[name="randomLengthMode"]:checked').value; 
+            state.arrayStartAngle = parseInt(controls.arrayStartAngle.value); 
+            state.arrayEndAngle = parseInt(controls.arrayEndAngle.value);
+            state.radialRotStart = parseInt(controls.radialRotStart.value); 
+            state.radialRotEnd = parseInt(controls.radialRotEnd.value); 
 
             if (controls.startSidesLabelSpan) controls.startSidesLabelSpan.textContent = formatSideValue(state.startSides);
             if (controls.endSidesLabelSpan) controls.endSidesLabelSpan.textContent = formatSideValue(state.endSides);
             
-            // Logic to show/hide duty cycle
             if (state.selectedWaveform === 'square') {
                 controls.dutyCycleGroup.classList.remove('hidden');
             } else {
                 controls.dutyCycleGroup.classList.add('hidden');
+            }
+
+            if (state.gradientMode === 'angular' && (state.layoutMode === 'radiating' || state.layoutMode === 'radial')) {
+                controls.gradientCyclesGroup.classList.remove('hidden');
+            } else {
+                controls.gradientCyclesGroup.classList.add('hidden');
             }
 
             draw();
@@ -1126,6 +1340,25 @@
             controls.concentricControls.classList.add('hidden');
             controls.modTargetGroup.classList.remove('hidden');
             
+            // Toggle Groups Based on Mode
+            if (state.layoutMode === 'radiating') {
+                controls.shapeMorphGroup.classList.add('hidden');
+                controls.randomLengthGroup.classList.remove('hidden');
+                controls.radialAngleGroup.classList.add('hidden');
+                controls.radialShapeRotGroup.classList.add('hidden'); // Hide Shape Rot
+            } else if (state.layoutMode === 'radial') {
+                controls.shapeMorphGroup.classList.remove('hidden');
+                controls.randomLengthGroup.classList.add('hidden');
+                controls.radialAngleGroup.classList.remove('hidden');
+                controls.radialShapeRotGroup.classList.remove('hidden'); // Show Shape Rot
+            } else {
+                // Concentric
+                controls.shapeMorphGroup.classList.remove('hidden');
+                controls.randomLengthGroup.classList.add('hidden');
+                controls.radialAngleGroup.classList.add('hidden');
+                controls.radialShapeRotGroup.classList.add('hidden'); // Hide Shape Rot
+            }
+            
             if (state.layoutMode === 'radial') {
                 controls.radialControls.classList.remove('hidden');
                 controls.sharedCountControl.classList.remove('hidden'); 
@@ -1135,7 +1368,6 @@
             } else if (state.layoutMode === 'concentric') {
                 controls.concentricControls.classList.remove('hidden');
                 controls.sharedCountControl.classList.add('hidden'); 
-                controls.morphControls.forEach(el => el.classList.remove('hidden'));
                 controls.rotationModeGroup.classList.remove('hidden');
                 controls.concentricCountGroup.classList.remove('hidden');
                 
@@ -1146,7 +1378,6 @@
                 controls.concentricControls.classList.remove('hidden'); 
                 controls.sharedCountControl.classList.remove('hidden'); 
                 
-                controls.morphControls.forEach(el => el.classList.add('hidden'));
                 controls.rotationModeGroup.classList.add('hidden');
                 controls.concentricCountGroup.classList.add('hidden');
                 controls.modTargetGroup.classList.add('hidden'); 
@@ -1169,15 +1400,21 @@
                 controls.pathLogGroup.classList.remove('fibonacci-hidden');
                 controls.debugTools.classList.remove('fibonacci-hidden'); 
                 controls.count.max = 1000;
+                controls.radialAngleGroup.classList.add('hidden');
+                controls.radialShapeRotGroup.classList.add('hidden'); // Hide for complex spiral? Or keep? Let's hide to simplify.
                 handleSpiralTypeChange(); 
             } else {
-                if (labelTextSpan) labelTextSpan.textContent = 'Array Radius: ';
+                if (labelTextSpan) labelTextSpan.textContent = 'Array Radius: '; 
                 controls.numSpiralsGroup.classList.add('fibonacci-hidden');
                 controls.spiralTurnsGroup.classList.add('fibonacci-hidden');
                 controls.spiralTypeGroup.classList.add('fibonacci-hidden'); 
                 controls.pathLogGroup.classList.add('fibonacci-hidden');
                 controls.debugTools.classList.add('fibonacci-hidden'); 
                 controls.count.max = 100;
+                if(state.layoutMode === 'radial') {
+                    controls.radialAngleGroup.classList.remove('hidden');
+                    controls.radialShapeRotGroup.classList.remove('hidden'); // Show for radial array
+                }
             }
             updateState();
         }
@@ -1208,7 +1445,6 @@
             const svgElements = result.elements;
             const svgDefs = result.defs ? result.defs.join('\n') : '';
 
-            // Apply Global Rotation to the group wrapper
             const transform = `rotate(${state.globalRotation}, ${centerX}, ${centerY})`;
 
             const svgString = `
@@ -1242,6 +1478,7 @@
         controls.angleOffsetModeRadios.forEach(radio => radio.addEventListener('change', handleAngleOffsetModeChange));
         controls.gradientModeRadios.forEach(radio => radio.addEventListener('change', updateState)); 
         controls.waveformRadios.forEach(radio => radio.addEventListener('change', updateState));
+        controls.randomLengthRadios.forEach(radio => radio.addEventListener('change', updateState)); 
 
         controls.numSpirals.addEventListener('input', updateState); 
         controls.spiralTurns.addEventListener('input', updateState); 
@@ -1260,8 +1497,20 @@
         
         controls.startSides.addEventListener('input', updateState);
         controls.endSides.addEventListener('input', updateState);
+
+        // Seed Listeners
+        controls.seedInc.addEventListener('click', () => {
+            state.seed++;
+            controls.seedDisplay.textContent = state.seed;
+            draw();
+        });
+        controls.seedDec.addEventListener('click', () => {
+            state.seed--;
+            controls.seedDisplay.textContent = state.seed;
+            draw();
+        });
         
-        // Defaults for concentric square morph
+        // Defaults
         document.getElementById('concentric').checked = true;
         document.getElementById('targetOutline').checked = true;
         document.getElementById('rotateShapes').checked = true; 
@@ -1273,7 +1522,7 @@
         controls.startAmp.value = 0; 
         controls.endAmp.value = 20; 
         controls.concentricCount.value = 60; 
-        controls.distLog.value = 0.2; // Show off the fix
+        controls.distLog.value = 0.2;
         controls.concentricAngleOffset.value = 0.06; 
         controls.angleOffsetLog.value = 1.00; 
         
