@@ -28,10 +28,13 @@
             align-items: center;
             background-color: #000;
             overflow: hidden;
+            perspective: 1000px;
         }
         canvas {
             background-color: #000; 
             box-shadow: 0 0 50px rgba(255, 255, 255, 0.1);
+            transition: transform 0.1s linear;
+            transform-style: preserve-3d;
         }
         .control-group {
             margin-bottom: 20px;
@@ -60,13 +63,23 @@
             width: 100%;
             margin-top: 5px;
         }
-        input[type="number"] {
-            width: 60px;
+        input[type="number"], input[type="text"], select {
             padding: 2px 5px;
             border: 1px solid #ccc;
             border-radius: 3px;
             font-size: 14px;
+        }
+        input[type="number"] {
+            width: 60px;
             text-align: right;
+        }
+        input[type="text"] {
+            width: 100%;
+            margin-right: 5px;
+        }
+        select {
+            width: 100%;
+            margin-right: 5px;
         }
         .radio-group label {
             display: inline-block;
@@ -113,6 +126,10 @@
             color: #666;
             margin-left: 2px;
         }
+        #viewControls {
+            border-color: #2196F3;
+            background-color: #f0f8ff;
+        }
         .seed-btn {
             background-color: #eee;
             border: 1px solid #ccc;
@@ -156,6 +173,27 @@
             border-color: #1976D2;
         }
         
+        .collapsible-header {
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        .collapsible-content {
+            overflow: hidden;
+            transition: max-height 0.2s ease-out;
+        }
+        .is-collapsed .collapsible-content {
+            display: none;
+        }
+        .arrow {
+            transition: transform 0.2s;
+        }
+        .is-collapsed .arrow {
+            transform: rotate(-90deg);
+        }
+        
         .group-title {
             font-size: 1.1em;
             margin-bottom: 15px;
@@ -168,12 +206,31 @@
             border-color: #FF9800;
             background-color: #fff8e1;
         }
+        #presetGroup {
+            border-color: #607D8B;
+            background-color: #eceff1;
+        }
     </style>
 </head>
 <body>
 
     <div id="controls">
         
+        <div class="control-group" id="presetGroup">
+            <label class="group-title">Preset Manager</label>
+            <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                <select id="presetSelect" style="flex-grow: 1;">
+                    <option value="" disabled selected>Select Preset...</option>
+                </select>
+                <button id="btnLoadPreset" class="anim-btn">Load</button>
+                <button id="btnDeletePreset" class="anim-btn" style="color: #d32f2f; border-color: #ef9a9a;">X</button>
+            </div>
+            <div style="display: flex; gap: 5px;">
+                <input type="text" id="presetName" placeholder="New Preset Name">
+                <button id="btnSavePreset" class="anim-btn" style="width: 60px;">Save</button>
+            </div>
+        </div>
+
         <div class="control-group">
             <label>Layout Mode:</label>
             <div class="radio-group">
@@ -186,11 +243,6 @@
                 <input type="radio" id="radiating" name="layoutMode" value="radiating">
                 <label for="radiating">Radiating Lines</label>
             </div>
-        </div>
-        
-        <div class="control-group">
-            <label for="globalRotationNum">Global Rotation (Z-Axis): <input type="number" id="globalRotationNum" min="-179" max="179" step="1" value="0"></label>
-            <input type="range" id="globalRotation" min="-179" max="179" step="1" value="0">
         </div>
 
         <div class="control-group" id="baseRadiusGroup">
@@ -475,6 +527,26 @@
         
         <button id="exportButton">Export as SVG</button>
 
+        <div class="control-group is-collapsed" id="viewControls">
+            <div class="collapsible-header">
+                <label style="margin-bottom:0; cursor:pointer;">3D Canvas Orientation</label>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="collapsible-content">
+                <label for="tiltXNum" style="font-weight:normal; margin-top:5px;">Tilt (X-Axis): <input type="number" id="tiltXNum" min="-85" max="85" step="1" value="0"></label>
+                <input type="range" id="tiltX" min="-85" max="85" step="1" value="0">
+
+                <label for="panYNum" style="font-weight:normal; margin-top:5px;">Pan (Y-Axis): <input type="number" id="panYNum" min="-85" max="85" step="1" value="0"></label>
+                <input type="range" id="panY" min="-85" max="85" step="1" value="0">
+                
+                <label for="perspectiveNum" style="font-weight:normal; margin-top:5px;">Perspective: <input type="number" id="perspectiveNum" min="200" max="2000" step="10" value="1000"></label>
+                <input type="range" id="perspective" min="200" max="2000" step="10" value="1000">
+                
+                <label for="globalRotationNum" style="margin-top:10px;">Global Rotation (Z-Axis): <input type="number" id="globalRotationNum" min="-179" max="179" step="1" value="0"></label>
+                <input type="range" id="globalRotation" min="-179" max="179" step="1" value="0">
+            </div>
+        </div>
+
     </div>
 
     <div id="canvasContainer">
@@ -498,6 +570,12 @@
         const MIN_POLYGON_SIDES = 3;
         const MAX_POLYGON_SIDES = 60;
         const RADIATING_LINE_SEGMENTS = 200; 
+
+        // Toggle collapsible
+        const viewHeader = document.querySelector('#viewControls .collapsible-header');
+        viewHeader.addEventListener('click', () => {
+            document.getElementById('viewControls').classList.toggle('is-collapsed');
+        });
 
         function linkInputs(rangeId, numberId) {
             const range = document.getElementById(rangeId);
@@ -526,8 +604,16 @@
             startColor: document.getElementById('startColor'),
             endColor: document.getElementById('endColor'),
             
-            // Removed tiltX, panY, perspective
-            globalRotation: document.getElementById('globalRotation'),
+            // Presets
+            presetSelect: document.getElementById('presetSelect'),
+            presetName: document.getElementById('presetName'),
+            btnLoadPreset: document.getElementById('btnLoadPreset'),
+            btnDeletePreset: document.getElementById('btnDeletePreset'),
+            btnSavePreset: document.getElementById('btnSavePreset'),
+            
+            tiltX: document.getElementById('tiltX'),
+            panY: document.getElementById('panY'),
+            perspective: document.getElementById('perspective'),
 
             freq: document.getElementById('freq'),
             phase: document.getElementById('phase'),
@@ -554,6 +640,7 @@
             endSides: document.getElementById('endSides'),
             dutyCycle: document.getElementById('dutyCycle'),
             gradientDivisions: document.getElementById('gradientDivisions'), 
+            globalRotation: document.getElementById('globalRotation'),
 
             drawPathCurve: document.getElementById('drawPathCurve'), 
             waveformRadios: document.querySelectorAll('input[name="waveform"]'),
@@ -614,6 +701,9 @@
         const endRadiusLabelText = document.getElementById('endRadiusLabelText');
         const twistLabel = document.getElementById('twistLabel');
 
+        linkInputs('tiltX', 'tiltXNum');
+        linkInputs('panY', 'panYNum');
+        linkInputs('perspective', 'perspectiveNum');
         linkInputs('startLineWidth', 'startLineWidthNum');
         linkInputs('endLineWidth', 'endLineWidthNum');
         linkInputs('startRadius', 'startRadiusNum');
@@ -678,9 +768,9 @@
         let state = {
             startColor: controls.startColor.value,
             endColor: controls.endColor.value,
-            
-            // REMOVED tiltX, panY, perspective
-
+            tiltX: parseInt(controls.tiltX.value) || 0,
+            panY: parseInt(controls.panY.value) || 0,
+            perspective: parseInt(controls.perspective.value) || 1000,
             freq: parseInt(controls.freq.value) || 50,
             phase: parseFloat(controls.phase.value) || 0,
             startAmp: parseFloat(controls.startAmp.value) || 0,
@@ -728,6 +818,128 @@
             trailZ: parseInt(controls.trailZ.value) || 0,
             glowEnabled: controls.glowEnabled.checked,
         };
+        
+        // ----- PRESET MANAGER LOGIC -----
+        const PRESET_KEY = 'genArtPresets';
+
+        function loadPresetsFromLS() {
+            const saved = localStorage.getItem(PRESET_KEY);
+            const presets = saved ? JSON.parse(saved) : {};
+            
+            // Clear except default option
+            controls.presetSelect.innerHTML = '<option value="" disabled selected>Select Preset...</option>';
+            
+            Object.keys(presets).sort().forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                controls.presetSelect.appendChild(option);
+            });
+            return presets;
+        }
+
+        function savePreset() {
+            const name = controls.presetName.value.trim();
+            if (!name) {
+                alert("Please enter a preset name.");
+                return;
+            }
+            
+            const presets = loadPresetsFromLS();
+            presets[name] = JSON.parse(JSON.stringify(state)); // Deep copy current state
+            
+            localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
+            loadPresetsFromLS(); // Refresh dropdown
+            controls.presetSelect.value = name; // Select newly saved
+            controls.presetName.value = ""; // Clear input
+        }
+
+        function deletePreset() {
+            const name = controls.presetSelect.value;
+            if (!name) return;
+            
+            if (confirm(`Delete preset "${name}"?`)) {
+                const presets = loadPresetsFromLS();
+                delete presets[name];
+                localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
+                loadPresetsFromLS();
+            }
+        }
+
+        function applyPresetState(loadedState) {
+            // 1. Update State Object
+            state = { ...state, ...loadedState }; // Merge to ensure new props exist
+            
+            // 2. Update UI Inputs to match State
+            // Common inputs
+            controls.startColor.value = state.startColor;
+            controls.endColor.value = state.endColor;
+            
+            // Ranges/Numbers
+            const numUpdates = [
+                'tiltX', 'panY', 'perspective', 'freq', 'phase', 'startAmp', 'endAmp',
+                'startLineWidth', 'endLineWidth', 'ampLog', 'distLog', 'pathLog',
+                'angleOffsetLog', 'arrayRadius', 'count', 'concentricCount',
+                'concRotStart', 'concRotEnd', 'startRadius', 'endRadius', 'numSpirals',
+                'spiralTurns', 'startBaseRadius', 'endBaseRadius', 'startSides', 'endSides',
+                'dutyCycle', 'gradientDivisions', 'arrayStartAngle', 'arrayEndAngle',
+                'radialRotStart', 'radialRotEnd', 'globalRotation', 'trailDecay', 'trailZ'
+            ];
+            
+            numUpdates.forEach(key => {
+                if (controls[key]) { // Check if control exists
+                   controls[key].value = state[key];
+                   // Also update the linked number input if it exists
+                   const numInput = document.getElementById(key + 'Num');
+                   if (numInput) numInput.value = state[key];
+                }
+            });
+            
+            // Radios
+            const setRadio = (name, val) => {
+                const radios = document.querySelectorAll(`input[name="${name}"]`);
+                radios.forEach(r => r.checked = (r.value === val));
+            };
+            setRadio('waveform', state.selectedWaveform);
+            setRadio('layoutMode', state.layoutMode);
+            setRadio('modTarget', state.modTarget);
+            setRadio('arrayPath', state.arrayPath);
+            setRadio('spiralType', state.spiralType);
+            setRadio('angleOffsetMode', state.angleOffsetMode);
+            setRadio('gradientMode', state.gradientMode);
+            setRadio('randomLengthMode', state.randomLengthMode);
+            
+            // Checkboxes
+            controls.drawPathCurve.checked = state.drawPathCurve;
+            controls.trailsEnabled.checked = state.trailsEnabled;
+            controls.glowEnabled.checked = state.glowEnabled;
+            
+            // Seed Display
+            controls.seedDisplay.textContent = state.seed;
+            
+            // Trigger logic updates (visibility toggling etc)
+            // We need to manually call handleLayoutChange to update UI visibility
+            // Passing a dummy event object with target.value
+            handleLayoutChange({ target: { value: state.layoutMode } });
+            
+            // Force redraw
+            updateState();
+        }
+
+        controls.btnSavePreset.addEventListener('click', savePreset);
+        controls.btnDeletePreset.addEventListener('click', deletePreset);
+        controls.btnLoadPreset.addEventListener('click', () => {
+            const name = controls.presetSelect.value;
+            if (!name) return;
+            const presets = loadPresetsFromLS();
+            if (presets[name]) {
+                applyPresetState(presets[name]);
+            }
+        });
+        
+        // Initialize Presets on Load
+        loadPresetsFromLS();
+        // --------------------------------
 
         let isAnimating = false;
         let animDirection = 1; 
@@ -1000,6 +1212,7 @@
 
             const globalStartR = state.startRadius;
             const globalEndR = state.endRadius;
+            
             const phaseNorm = state.phase / 2; 
             const rotStartRad = state.concRotStart * (Math.PI / 180);
             const rotEndRad = state.concRotEnd * (Math.PI / 180);
@@ -1032,6 +1245,7 @@
                 for(let j = 0; j <= segments; j++) {
                     const t = j / segments; 
                     const currentR = R_inner + (t * range);
+                    
                     const twistT = applyLogScale(t, state.angleOffsetLog);
                     const twistAngle = rotStartRad + (rotEndRad - rotStartRad) * twistT;
 
@@ -1257,7 +1471,6 @@
             }
         }
 
-        // --- UPDATED DRAW CONCENTRIC ---
         function drawConcentricShapes(svgData) {
             const center = { x: centerX, y: centerY };
             const totalCount = state.concentricCount;
@@ -1390,7 +1603,7 @@
 
             state.startColor = controls.startColor.value;
             state.endColor = controls.endColor.value;
-            // REMOVED tiltX/panY refs
+            // tiltX/panY removed
             
             state.freq = parseInt(controls.freq.value);
             state.phase = parseFloat(controls.phase.value);
@@ -1673,7 +1886,6 @@
 
         handleLayoutChange({ target: { value: 'concentric' } });
         
-        // FINAL SAFETY CALL TO DRAW
         updateState();
     </script>
 
