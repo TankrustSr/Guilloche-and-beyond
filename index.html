@@ -42,6 +42,15 @@
             border: 1px solid #ddd;
             border-radius: 5px;
         }
+        .sub-group {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px dashed #eee;
+        }
+        .sub-group:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
         label {
             display: block;
             font-weight: bold;
@@ -84,6 +93,7 @@
             cursor: pointer;
             font-size: 16px;
             margin-top: 10px;
+            margin-bottom: 20px; 
         }
         #exportButton:hover {
             background-color: #45a049;
@@ -95,8 +105,10 @@
             margin-top: 10px;
         }
         #dutyCycleGroup {
-            border-color: #4CAF50;
+            margin-top: 10px;
+            padding: 5px;
             background-color: #f9fff9;
+            border-radius: 4px;
         }
         .unit {
             font-weight: normal;
@@ -119,28 +131,156 @@
         .seed-btn:hover {
             background-color: #ddd;
         }
+        
+        .collapsible-header {
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        .collapsible-content {
+            overflow: hidden;
+            transition: max-height 0.2s ease-out;
+        }
+        .is-collapsed .collapsible-content {
+            display: none;
+        }
+        .arrow {
+            transition: transform 0.2s;
+        }
+        .is-collapsed .arrow {
+            transform: rotate(-90deg);
+        }
+        
+        /* Group Header Style */
+        .group-title {
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #eee;
+            color: #333;
+        }
     </style>
 </head>
 <body>
 
     <div id="controls">
-        <h2>Parameters</h2>
+        
+        <div class="control-group">
+            <label>Layout Mode:</label>
+            <div class="radio-group">
+                <input type="radio" id="concentric" name="layoutMode" value="concentric" checked>
+                <label for="concentric">Concentric</label>
 
-        <div class="control-group" id="viewControls">
-            <label>3D Canvas Orientation:</label>
-            <label for="tiltXNum" style="font-weight:normal; margin-top:5px;">Tilt (X-Axis): <input type="number" id="tiltXNum" min="-85" max="85" step="1" value="0"></label>
-            <input type="range" id="tiltX" min="-85" max="85" step="1" value="0">
+                <input type="radio" id="radial" name="layoutMode" value="radial">
+                <label for="radial">Radial Array</label>
+                
+                <input type="radio" id="radiating" name="layoutMode" value="radiating">
+                <label for="radiating">Radiating Lines</label>
+            </div>
+        </div>
 
-            <label for="panYNum" style="font-weight:normal; margin-top:5px;">Pan (Y-Axis): <input type="number" id="panYNum" min="-85" max="85" step="1" value="0"></label>
-            <input type="range" id="panY" min="-85" max="85" step="1" value="0">
-            
-            <label for="perspectiveNum" style="font-weight:normal; margin-top:5px;">Perspective: <input type="number" id="perspectiveNum" min="200" max="2000" step="10" value="1000"></label>
-            <input type="range" id="perspective" min="200" max="2000" step="10" value="1000">
+        <div class="control-group" id="baseRadiusGroup">
+            <label for="startRadiusNum"><span id="startRadiusLabelText">Inner Radius:</span> <input type="number" id="startRadiusNum" min="0" max="375" step="1" value="20"></label>
+            <input type="range" id="startRadius" min="0" max="375" step="1" value="20">
+
+            <label for="endRadiusNum"><span id="endRadiusLabelText">Outer Radius:</span> <input type="number" id="endRadiusNum" min="1" max="500" step="1" value="350"></label>
+            <input type="range" id="endRadius" min="1" max="500" step="1" value="350">
+        </div>
+
+        <div class="control-group" id="sharedCountControl">
+             <label for="countNum">Item Count / Rays: <input type="number" id="countNum" min="4" max="1000" step="1" value="80"></label>
+            <input type="range" id="count" min="4" max="1000" step="1" value="80"> 
+        </div>
+        
+        <div class="control-group" id="concentricCountGroup">
+            <label for="concentricCountNum">Shape Count: <input type="number" id="concentricCountNum" min="5" max="200" step="1" value="50"></label>
+            <input type="range" id="concentricCount" min="5" max="200" step="1" value="50">
         </div>
 
         <div class="control-group">
-            <label for="globalRotationNum">Global Rotation (Z-Axis): <input type="number" id="globalRotationNum" min="-179" max="179" step="1" value="0"></label>
-            <input type="range" id="globalRotation" min="-179" max="179" step="1" value="0">
+            <label for="startLineWidthNum">Start Line Width: <input type="number" id="startLineWidthNum" min="0.1" max="50" step="0.1" value="2.0"></label>
+            <input type="range" id="startLineWidth" min="0.1" max="50" step="0.1" value="2.0">
+            
+            <label for="endLineWidthNum">End Line Width: <input type="number" id="endLineWidthNum" min="0.1" max="50" step="0.1" value="2.0"></label>
+            <input type="range" id="endLineWidth" min="0.1" max="50" step="0.1" value="2.0">
+        </div>
+
+        <div class="control-group" id="concentricRotationGroup">
+            <label class="group-title">Rotation</label>
+            
+            <label for="concRotStartNum" style="font-weight:normal;">Start Rotation (°): <input type="number" id="concRotStartNum" min="-720" max="720" step="1" value="0"></label>
+            <input type="range" id="concRotStart" min="-720" max="720" step="1" value="0">
+
+            <label for="concRotEndNum" style="font-weight:normal; margin-top:5px;">End Rotation (°): <input type="number" id="concRotEndNum" min="-720" max="720" step="1" value="90"></label>
+            <input type="range" id="concRotEnd" min="-720" max="720" step="1" value="90">
+            
+            <label for="angleOffsetLogNum" style="font-weight:normal; margin-top:10px;">Rotation Log Dist: <input type="number" id="angleOffsetLogNum" min="0.1" max="5" step="0.01" value="1.0"></label>
+            <input type="range" id="angleOffsetLog" min="0.1" max="5" step="0.01" value="1.0">
+            
+            <div id="rotationModeGroup" style="margin-top:10px;">
+                <label style="font-weight:normal;">Rotation Mode:</label>
+                <div class="radio-group">
+                    <input type="radio" id="rotateCenters" name="angleOffsetMode" value="rotateCenters">
+                    <label for="rotateCenters">Spiral Position</label>
+                    <input type="radio" id="rotateShapes" name="angleOffsetMode" value="rotateShapes" checked>
+                    <label for="rotateShapes">Twist Shapes</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-group" id="modulationGroup">
+            <label class="group-title">Modulation Settings</label>
+
+            <div class="sub-group">
+                <label>Waveform:</label>
+                <div class="radio-group">
+                    <input type="radio" id="sine" name="waveform" value="sine" checked>
+                    <label for="sine">Sine</label>
+                    <input type="radio" id="square" name="waveform" value="square">
+                    <label for="square">Sq.</label>
+                    <input type="radio" id="sawtooth" name="waveform" value="sawtooth">
+                    <label for="sawtooth">Saw.</label>
+                    <input type="radio" id="triangle" name="waveform" value="triangle">
+                    <label for="triangle">Tri.</label>
+                    <input type="radio" id="samplehold" name="waveform" value="samplehold">
+                    <label for="samplehold">S&H</label>
+                </div>
+                <div id="dutyCycleGroup" class="hidden">
+                    <label for="dutyCycleNum" style="font-weight:normal;">Square Duty Cycle (%): <input type="number" id="dutyCycleNum" min="0.01" max="0.99" step="0.01" value="0.50"></label>
+                    <input type="range" id="dutyCycle" min="0.01" max="0.99" step="0.01" value="0.50">
+                </div>
+            </div>
+
+            <div class="sub-group">
+                <label for="freqNum">Modulation Cycles: <input type="number" id="freqNum" min="0" max="200" step="1" value="50"></label>
+                <input type="range" id="freq" min="0" max="200" step="1" value="50">
+
+                <label for="phaseNum" style="margin-top:5px;">Phase Offset (<span class="unit">x $\pi$</span>): <input type="number" id="phaseNum" min="0" max="2" step="0.01" value="0"></label>
+                <input type="range" id="phase" min="0" max="2" step="0.01" value="0">
+            </div>
+
+            <div class="sub-group">
+                <label>Amplitude:</label>
+                <label for="startAmpNum" style="font-weight:normal; font-size: 0.9em;">Start (Inner): <input type="number" id="startAmpNum" min="0" max="500" step="1" value="0"></label>
+                <input type="range" id="startAmp" min="0" max="500" step="1" value="0">
+                
+                <label for="endAmpNum" style="font-weight:normal; font-size: 0.9em; margin-top:5px;">End (Outer): <input type="number" id="endAmpNum" min="0" max="500" step="1" value="40"></label>
+                <input type="range" id="endAmp" min="0" max="500" step="1" value="40">
+
+                <label for="ampLogNum" style="font-weight:normal; font-size: 0.9em; margin-top:5px;">Amp Log Dist: <input type="number" id="ampLogNum" min="0.1" max="5" step="0.01" value="1.0"></label>
+                <input type="range" id="ampLog" min="0.1" max="5" step="0.01" value="1.0">
+            </div>
+        </div>
+
+        <div class="control-group hidden" id="radialShapeRotGroup">
+            <label>Shape Orientation (Z-Axis):</label>
+            <label for="radialRotStartNum" style="font-weight:normal; margin-top:5px;">Start Rotation (°): <input type="number" id="radialRotStartNum" min="-720" max="720" step="1" value="90"></label>
+            <input type="range" id="radialRotStart" min="-720" max="720" step="1" value="90">
+
+            <label for="radialRotEndNum" style="font-weight:normal; margin-top:5px;">End Rotation (°): <input type="number" id="radialRotEndNum" min="-720" max="720" step="1" value="450"></label>
+            <input type="range" id="radialRotEnd" min="-720" max="720" step="1" value="450">
         </div>
 
         <div class="control-group">
@@ -165,36 +305,6 @@
         <div class="control-group" id="gradientCyclesGroup">
             <label for="gradientDivisionsNum">Gradient Cycles (360°): <input type="number" id="gradientDivisionsNum" min="1" max="36" step="1" value="1"></label>
             <input type="range" id="gradientDivisions" min="1" max="36" step="1" value="1">
-        </div>
-
-        <div class="control-group">
-            <label for="startLineWidthNum">Start Line Width: <input type="number" id="startLineWidthNum" min="0.1" max="50" step="0.1" value="0.5"></label>
-            <input type="range" id="startLineWidth" min="0.1" max="50" step="0.1" value="0.5">
-            
-            <label for="endLineWidthNum">End Line Width: <input type="number" id="endLineWidthNum" min="0.1" max="50" step="0.1" value="0.5"></label>
-            <input type="range" id="endLineWidth" min="0.1" max="50" step="0.1" value="0.5">
-        </div>
-
-        <div class="control-group" id="baseRadiusGroup">
-            <label for="startRadiusNum"><span id="startRadiusLabelText">Inner Radius:</span> <input type="number" id="startRadiusNum" min="0" max="375" step="1" value="20"></label>
-            <input type="range" id="startRadius" min="0" max="375" step="1" value="20">
-
-            <label for="endRadiusNum"><span id="endRadiusLabelText">Outer Radius:</span> <input type="number" id="endRadiusNum" min="1" max="500" step="1" value="350"></label>
-            <input type="range" id="endRadius" min="1" max="500" step="1" value="350">
-        </div>
-
-        <div class="control-group">
-            <label>Layout Mode:</label>
-            <div class="radio-group">
-                <input type="radio" id="concentric" name="layoutMode" value="concentric">
-                <label for="concentric">Concentric</label>
-
-                <input type="radio" id="radial" name="layoutMode" value="radial">
-                <label for="radial">Radial Array</label>
-                
-                <input type="radio" id="radiating" name="layoutMode" value="radiating" checked>
-                <label for="radiating">Radiating Lines</label>
-            </div>
         </div>
         
         <div class="control-group hidden" id="randomLengthGroup" style="border-color: #9C27B0; background-color: #fdf5ff;">
@@ -228,22 +338,11 @@
         
         <div class="control-group hidden" id="radialAngleGroup">
             <label>Array Angle Range:</label>
-            
             <label for="arrayStartAngleNum" style="font-weight:normal; margin-top:5px;">Start Angle (°): <input type="number" id="arrayStartAngleNum" min="0" max="360" step="1" value="0"></label>
             <input type="range" id="arrayStartAngle" min="0" max="360" step="1" value="0">
 
             <label for="arrayEndAngleNum" style="font-weight:normal; margin-top:5px;">End Angle (°): <input type="number" id="arrayEndAngleNum" min="0" max="360" step="1" value="360"></label>
             <input type="range" id="arrayEndAngle" min="0" max="360" step="1" value="360">
-        </div>
-
-        <div class="control-group hidden" id="radialShapeRotGroup">
-            <label>Shape Orientation (Z-Axis):</label>
-            
-            <label for="radialRotStartNum" style="font-weight:normal; margin-top:5px;">Start Rotation (°): <input type="number" id="radialRotStartNum" min="-720" max="720" step="1" value="90"></label>
-            <input type="range" id="radialRotStart" min="-720" max="720" step="1" value="90">
-
-            <label for="radialRotEndNum" style="font-weight:normal; margin-top:5px;">End Rotation (°): <input type="number" id="radialRotEndNum" min="-720" max="720" step="1" value="450"></label>
-            <input type="range" id="radialRotEnd" min="-720" max="720" step="1" value="450">
         </div>
 
         <div class="control-group" id="modTargetGroup">
@@ -266,55 +365,6 @@
                 <label for="endSidesNum">End Sides (<span id="endSidesLabel">Circle</span>): <input type="number" id="endSidesNum" min="0" max="60" step="1" value="0"></label>
                 <input type="range" id="endSides" min="0" max="60" step="1" value="0">
             </div>
-        </div>
-
-        <div class="control-group">
-            <label>Waveform:</label>
-            <div class="radio-group">
-                <input type="radio" id="sine" name="waveform" value="sine" checked>
-                <label for="sine">Sine</label>
-                <input type="radio" id="square" name="waveform" value="square">
-                <label for="square">Square</label>
-                <input type="radio" id="sawtooth" name="waveform" value="sawtooth">
-                <label for="sawtooth">Sawtooth</label>
-                <input type="radio" id="triangle" name="waveform" value="triangle">
-                <label for="triangle">Triangle</label>
-                <input type="radio" id="samplehold" name="waveform" value="samplehold">
-                <label for="samplehold">S&H</label>
-            </div>
-        </div>
-
-        <div class="control-group hidden" id="dutyCycleGroup">
-            <label for="dutyCycleNum">Square Duty Cycle (%): <input type="number" id="dutyCycleNum" min="0.01" max="0.99" step="0.01" value="0.50"></label>
-            <input type="range" id="dutyCycle" min="0.01" max="0.99" step="0.01" value="0.50">
-        </div>
-
-        <div class="control-group">
-            <label for="freqNum">Modulation Cycles: <input type="number" id="freqNum" min="0" max="200" step="1" value="50"></label>
-            <input type="range" id="freq" min="0" max="200" step="1" value="50">
-        </div>
-
-        <div class="control-group">
-            <label for="phaseNum">Phase Offset (<span class="unit">x $\pi$</span>): <input type="number" id="phaseNum" min="0" max="2" step="0.01" value="0"></label>
-            <input type="range" id="phase" min="0" max="2" step="0.01" value="0">
-        </div>
-
-        <div class="control-group">
-            <label for="ampLogNum">Amplitude Log Dist: <input type="number" id="ampLogNum" min="0.1" max="5" step="0.01" value="1.0"></label>
-            <input type="range" id="ampLog" min="0.1" max="5" step="0.01" value="1.0">
-        </div>
-
-        <div class="control-group">
-            <label for="startAmpNum">Start Amplitude (Inner): <input type="number" id="startAmpNum" min="0" max="500" step="1" value="0"></label>
-            <input type="range" id="startAmp" min="0" max="500" step="1" value="0">
-            
-            <label for="endAmpNum">End Amplitude (Outer): <input type="number" id="endAmpNum" min="0" max="500" step="1" value="40"></label>
-            <input type="range" id="endAmp" min="0" max="500" step="1" value="40">
-        </div>
-        
-        <div class="control-group" id="sharedCountControl">
-             <label for="countNum">Item Count / Rays: <input type="number" id="countNum" min="4" max="1000" step="1" value="80"></label>
-            <input type="range" id="count" min="4" max="1000" step="1" value="80"> 
         </div>
 
         <div class="control-group hidden" id="radialControls">
@@ -373,36 +423,34 @@
             </div>
         </div>
 
-        <div class="control-group" id="concentricControls">
-            
-            <div id="concentricCountGroup">
-                <label for="concentricCountNum">Shape Count: <input type="number" id="concentricCountNum" min="5" max="200" step="1" value="50"></label>
-                <input type="range" id="concentricCount" min="5" max="200" step="1" value="50">
-            </div>
-            
+        <div class="control-group hidden" id="concentricControls">
             <div id="distLogGroup">
                 <label for="distLogNum">Concentric Log Dist: <input type="number" id="distLogNum" min="0.1" max="5" step="0.01" value="0.81"></label>
                 <input type="range" id="distLog" min="0.1" max="5" step="0.01" value="0.81">
             </div>
-
-            <label for="concentricAngleOffsetNum"><span id="twistLabel">Rotation Amount (<span class="unit">x $\pi$</span>):</span> <input type="number" id="concentricAngleOffsetNum" min="0" max="2" step="0.01" value="0.05"></label>
-            <input type="range" id="concentricAngleOffset" min="0" max="2" step="0.01" value="0.05">
-            
-            <label for="angleOffsetLogNum">Rotation Log Dist: <input type="number" id="angleOffsetLogNum" min="0.1" max="5" step="0.01" value="1.0"></label>
-            <input type="range" id="angleOffsetLog" min="0.1" max="5" step="0.01" value="1.0">
-
-            <div class="control-group" id="rotationModeGroup">
-                <label>Rotation Mode:</label>
-                <div class="radio-group">
-                    <input type="radio" id="rotateCenters" name="angleOffsetMode" value="rotateCenters">
-                    <label for="rotateCenters">Spiral Position</label>
-                    <input type="radio" id="rotateShapes" name="angleOffsetMode" value="rotateShapes" checked>
-                    <label for="rotateShapes">Twist Shapes</label>
-                </div>
-            </div>
         </div>
         
         <button id="exportButton">Export as SVG</button>
+
+        <div class="control-group is-collapsed" id="viewControls">
+            <div class="collapsible-header">
+                <label style="margin-bottom:0; cursor:pointer;">3D Canvas Orientation</label>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="collapsible-content">
+                <label for="tiltXNum" style="font-weight:normal; margin-top:5px;">Tilt (X-Axis): <input type="number" id="tiltXNum" min="-85" max="85" step="1" value="0"></label>
+                <input type="range" id="tiltX" min="-85" max="85" step="1" value="0">
+
+                <label for="panYNum" style="font-weight:normal; margin-top:5px;">Pan (Y-Axis): <input type="number" id="panYNum" min="-85" max="85" step="1" value="0"></label>
+                <input type="range" id="panY" min="-85" max="85" step="1" value="0">
+                
+                <label for="perspectiveNum" style="font-weight:normal; margin-top:5px;">Perspective: <input type="number" id="perspectiveNum" min="200" max="2000" step="10" value="1000"></label>
+                <input type="range" id="perspective" min="200" max="2000" step="10" value="1000">
+                
+                <label for="globalRotationNum" style="margin-top:10px;">Global Rotation (Z-Axis): <input type="number" id="globalRotationNum" min="-179" max="179" step="1" value="0"></label>
+                <input type="range" id="globalRotation" min="-179" max="179" step="1" value="0">
+            </div>
+        </div>
 
     </div>
 
@@ -427,6 +475,12 @@
         const MIN_POLYGON_SIDES = 3;
         const MAX_POLYGON_SIDES = 60;
         const RADIATING_LINE_SEGMENTS = 200; 
+
+        // Toggle collapsible
+        const viewHeader = document.querySelector('#viewControls .collapsible-header');
+        viewHeader.addEventListener('click', () => {
+            document.getElementById('viewControls').classList.toggle('is-collapsed');
+        });
 
         function linkInputs(rangeId, numberId) {
             const range = document.getElementById(rangeId);
@@ -472,7 +526,8 @@
             arrayRadius: document.getElementById('arrayRadius'),
             count: document.getElementById('count'),
             concentricCount: document.getElementById('concentricCount'),
-            concentricAngleOffset: document.getElementById('concentricAngleOffset'), 
+            concRotStart: document.getElementById('concRotStart'), 
+            concRotEnd: document.getElementById('concRotEnd'), 
             startRadius: document.getElementById('startRadius'), 
             endRadius: document.getElementById('endRadius'),     
             numSpirals: document.getElementById('numSpirals'), 
@@ -482,8 +537,8 @@
             startSides: document.getElementById('startSides'),
             endSides: document.getElementById('endSides'),
             dutyCycle: document.getElementById('dutyCycle'),
-            globalRotation: document.getElementById('globalRotation'),
             gradientDivisions: document.getElementById('gradientDivisions'), 
+            globalRotation: document.getElementById('globalRotation'),
 
             drawPathCurve: document.getElementById('drawPathCurve'), 
             waveformRadios: document.querySelectorAll('input[name="waveform"]'),
@@ -521,9 +576,10 @@
             radialAngleGroup: document.getElementById('radialAngleGroup'),
             arrayStartAngle: document.getElementById('arrayStartAngle'),
             arrayEndAngle: document.getElementById('arrayEndAngle'),
-            radialShapeRotGroup: document.getElementById('radialShapeRotGroup'), // NEW
-            radialRotStart: document.getElementById('radialRotStart'), // NEW
-            radialRotEnd: document.getElementById('radialRotEnd'), // NEW
+            radialShapeRotGroup: document.getElementById('radialShapeRotGroup'), 
+            radialRotStart: document.getElementById('radialRotStart'), 
+            radialRotEnd: document.getElementById('radialRotEnd'), 
+            concentricRotationGroup: document.getElementById('concentricRotationGroup'), 
         };
         
         const startRadiusLabelText = document.getElementById('startRadiusLabelText');
@@ -554,14 +610,15 @@
         linkInputs('endSides', 'endSidesNum');
         linkInputs('concentricCount', 'concentricCountNum');
         linkInputs('distLog', 'distLogNum');
-        linkInputs('concentricAngleOffset', 'concentricAngleOffsetNum');
+        linkInputs('concRotStart', 'concRotStartNum'); 
+        linkInputs('concRotEnd', 'concRotEndNum'); 
         linkInputs('angleOffsetLog', 'angleOffsetLogNum');
-        linkInputs('globalRotation', 'globalRotationNum');
         linkInputs('gradientDivisions', 'gradientDivisionsNum'); 
         linkInputs('arrayStartAngle', 'arrayStartAngleNum');
         linkInputs('arrayEndAngle', 'arrayEndAngleNum'); 
-        linkInputs('radialRotStart', 'radialRotStartNum'); // NEW
-        linkInputs('radialRotEnd', 'radialRotEndNum'); // NEW
+        linkInputs('radialRotStart', 'radialRotStartNum'); 
+        linkInputs('radialRotEnd', 'radialRotEndNum'); 
+        linkInputs('globalRotation', 'globalRotationNum');
 
         const waveforms = {
             sine: (t, phase) => Math.sin(t + phase),
@@ -583,7 +640,6 @@
             }
         };
 
-        // Seeded Random Helper
         function seededRandom(seed) {
             let t = seed += 0x6D2B79F5;
             t = Math.imul(t ^ t >>> 15, t | 1);
@@ -591,51 +647,53 @@
             return ((t ^ t >>> 14) >>> 0) / 4294967296;
         }
 
+        // Initialize state with fallback 0s to prevent NaN
         let state = {
             startColor: controls.startColor.value,
             endColor: controls.endColor.value,
-            tiltX: parseInt(controls.tiltX.value),
-            panY: parseInt(controls.panY.value),
-            perspective: parseInt(controls.perspective.value),
-            freq: parseInt(controls.freq.value),
-            phase: parseFloat(controls.phase.value),
-            startAmp: parseFloat(controls.startAmp.value),
-            endAmp: parseFloat(controls.endAmp.value),
-            startLineWidth: parseFloat(controls.startLineWidth.value),
-            endLineWidth: parseFloat(controls.endLineWidth.value),
-            ampLog: parseFloat(controls.ampLog.value),
-            distLog: parseFloat(controls.distLog.value),
-            pathLog: parseFloat(controls.pathLog.value),
-            angleOffsetLog: parseFloat(controls.angleOffsetLog.value), 
-            arrayRadius: parseFloat(controls.arrayRadius.value),
-            count: parseInt(controls.count.value), 
-            concentricCount: parseInt(controls.concentricCount.value),
-            concentricAngleOffset: parseFloat(controls.concentricAngleOffset.value), 
-            startRadius: parseInt(controls.startRadius.value), 
-            endRadius: parseInt(controls.endRadius.value),
-            numSpirals: parseInt(controls.numSpirals.value), 
-            spiralTurns: parseFloat(controls.spiralTurns.value), 
+            tiltX: parseInt(controls.tiltX.value) || 0,
+            panY: parseInt(controls.panY.value) || 0,
+            perspective: parseInt(controls.perspective.value) || 1000,
+            freq: parseInt(controls.freq.value) || 50,
+            phase: parseFloat(controls.phase.value) || 0,
+            startAmp: parseFloat(controls.startAmp.value) || 0,
+            endAmp: parseFloat(controls.endAmp.value) || 40,
+            startLineWidth: parseFloat(controls.startLineWidth.value) || 2.0,
+            endLineWidth: parseFloat(controls.endLineWidth.value) || 2.0,
+            ampLog: parseFloat(controls.ampLog.value) || 1.0,
+            distLog: parseFloat(controls.distLog.value) || 0.81,
+            pathLog: parseFloat(controls.pathLog.value) || 1.0,
+            angleOffsetLog: parseFloat(controls.angleOffsetLog.value) || 1.0, 
+            arrayRadius: parseFloat(controls.arrayRadius.value) || 267,
+            count: parseInt(controls.count.value) || 80, 
+            concentricCount: parseInt(controls.concentricCount.value) || 50,
+            concRotStart: parseInt(controls.concRotStart.value) || 0, 
+            concRotEnd: parseInt(controls.concRotEnd.value) || 0, 
+            startRadius: parseInt(controls.startRadius.value) || 20, 
+            endRadius: parseInt(controls.endRadius.value) || 350,
+            numSpirals: parseInt(controls.numSpirals.value) || 1, 
+            spiralTurns: parseFloat(controls.spiralTurns.value) || 0.5, 
             drawPathCurve: controls.drawPathCurve.checked, 
             selectedWaveform: 'sine',
-            layoutMode: 'radiating',
+            layoutMode: 'concentric', // Default enforced
             modTarget: 'outline',
             arrayPath: 'fibonacci', 
             spiralType: 'fermat', 
-            startBaseRadius: parseFloat(controls.startBaseRadius.value),
-            endBaseRadius: parseFloat(controls.endBaseRadius.value),
-            startSides: parseInt(controls.startSides.value),
-            endSides: parseInt(controls.endSides.value),
+            startBaseRadius: parseFloat(controls.startBaseRadius.value) || 50,
+            endBaseRadius: parseFloat(controls.endBaseRadius.value) || 50,
+            startSides: parseInt(controls.startSides.value) || 0,
+            endSides: parseInt(controls.endSides.value) || 4,
             angleOffsetMode: 'rotateShapes', 
-            dutyCycle: parseFloat(controls.dutyCycle.value),
-            gradientMode: 'angular', 
-            globalRotation: parseInt(controls.globalRotation.value),
-            gradientDivisions: parseInt(controls.gradientDivisions.value),
+            dutyCycle: parseFloat(controls.dutyCycle.value) || 0.5,
+            gradientDivisions: parseInt(controls.gradientDivisions.value) || 1,
             randomLengthMode: 'none', 
             seed: 1, 
-            arrayStartAngle: parseInt(controls.arrayStartAngle.value), 
-            arrayEndAngle: parseInt(controls.arrayEndAngle.value),
-            radialRotStart: parseInt(controls.radialRotStart.value), // NEW
-            radialRotEnd: parseInt(controls.radialRotEnd.value), // NEW
+            arrayStartAngle: parseInt(controls.arrayStartAngle.value) || 0, 
+            arrayEndAngle: parseInt(controls.arrayEndAngle.value) || 360,
+            radialRotStart: parseInt(controls.radialRotStart.value) || 90, 
+            radialRotEnd: parseInt(controls.radialRotEnd.value) || 450, 
+            globalRotation: parseInt(controls.globalRotation.value) || 0,
+            gradientMode: 'angular'
         };
 
         function hexToRgb(hex) {
@@ -644,7 +702,7 @@
                 r: parseInt(result[1], 16),
                 g: parseInt(result[2], 16),
                 b: parseInt(result[3], 16)
-            } : null;
+            } : {r:0,g:0,b:0};
         }
 
         function lerpColor(c1, c2, t) {
@@ -670,7 +728,12 @@
             let t = (total > 1) ? i / (total - 1) : 0;
             
             if (state.layoutMode === 'concentric') {
-                if (i === 0 && state.distLog < 1.0 && total > 1) {
+                
+                // CHECK if rotating centers (Spiral Position)
+                const isSpiral = (state.angleOffsetMode === 'rotateCenters');
+
+                // Only apply hole-filling logic if NOT in spiral mode
+                if (!isSpiral && i === 0 && state.distLog < 1.0 && total > 1) {
                     let t_next = 1 / (total - 1);
                     let scaled_t_next = applyLogScale(t_next, state.distLog);
                     let r_next = state.startRadius + range * scaled_t_next;
@@ -702,7 +765,7 @@
             const c2 = hexToRgb(state.endColor);
             
             let t = (total > 1) ? i / (total - 1) : 0;
-            let scaledT = t * state.gradientDivisions;
+            let scaledT = t * (state.gradientDivisions || 1);
 
             if (scaledT > 0 && scaledT % 1 === 0) {
                 t = 1;
@@ -870,28 +933,23 @@
 
             const globalStartR = state.startRadius;
             const globalEndR = state.endRadius;
-            
             const phaseRad = state.phase * Math.PI;
-            const maxTwist = state.concentricAngleOffset * Math.PI * 4; 
+            
+            const rotStartRad = state.concRotStart * (Math.PI / 180);
+            const rotEndRad = state.concRotEnd * (Math.PI / 180);
             
             for (let i = 0; i < N; i++) {
-                
-                // RANDOM LENGTH CALCULATION with SEED
                 let R_inner = globalStartR;
                 let R_outer = globalEndR;
-                
                 const seedMix = i * 1337 + state.seed * 7919; 
                 const r1 = seededRandom(seedMix); 
                 const r2 = seededRandom(seedMix + 9999);
-
                 if (state.randomLengthMode === 'start') {
                     R_inner = globalStartR + r1 * (globalEndR - globalStartR);
                     if(R_inner > R_outer) R_inner = R_outer - 1; 
-
                 } else if (state.randomLengthMode === 'end') {
                     R_outer = globalStartR + r1 * (globalEndR - globalStartR);
                     if(R_outer < R_inner) R_outer = R_inner + 1;
-
                 } else if (state.randomLengthMode === 'both') {
                     let p1 = globalStartR + r1 * (globalEndR - globalStartR);
                     let p2 = globalStartR + r2 * (globalEndR - globalStartR);
@@ -910,7 +968,9 @@
                 for(let j = 0; j <= segments; j++) {
                     const t = j / segments; 
                     const currentR = R_inner + (t * range);
-                    const twistAngle = t * maxTwist;
+                    
+                    const twistT = applyLogScale(t, state.angleOffsetLog);
+                    const twistAngle = rotStartRad + (rotEndRad - rotStartRad) * twistT;
 
                     let t_amp_curve = t;
                     if (state.ampLog !== 1.0) t_amp_curve = Math.pow(t, state.ampLog);
@@ -1086,7 +1146,6 @@
             }
         }
 
-        // --- UPDATED DRAW RADIAL ARRAY ---
         function drawRadialArray(svgData) {
             const phaseRad = state.phase * Math.PI;
             const N = state.count; 
@@ -1103,12 +1162,10 @@
             const R_last = calculateShapeRadius(N - 1, N);
             const R_max_center_boundary = state.arrayRadius - R_last;
             
-            // CONVERT DEGREES TO RADIANS FOR START/END
             const startAngleRad = state.arrayStartAngle * (Math.PI / 180);
             const endAngleRad = state.arrayEndAngle * (Math.PI / 180);
             const totalAngleRange = endAngleRad - startAngleRad;
             
-            // CONVERT DEGREES TO RADIANS FOR SHAPE ROTATION
             const shapeRotStartRad = state.radialRotStart * (Math.PI / 180);
             const shapeRotEndRad = state.radialRotEnd * (Math.PI / 180);
 
@@ -1139,9 +1196,6 @@
                     const y = centerY + Math.sin(angle) * radius;
                     const center = { x, y };
                     
-                    // INTERPOLATED SHAPE ROTATION (Replaces automatic tangent logic)
-                    // If you want tangential behavior (perpendicular to radius):
-                    // Set StartRot to 90 deg (if startAngle 0) and EndRot to 360+90 deg
                     let shapeRotation = 0;
                     if (state.arrayPath === 'radial') {
                         shapeRotation = shapeRotStartRad + t * (shapeRotEndRad - shapeRotStartRad);
@@ -1165,15 +1219,27 @@
             }
         }
 
+        // --- UPDATED DRAW CONCENTRIC ---
         function drawConcentricShapes(svgData) {
             const center = { x: centerX, y: centerY };
             const totalCount = state.concentricCount;
-            const angleOffsetPerCircle = state.concentricAngleOffset * Math.PI; 
+            // NEW ROTATION LOGIC
+            const rotStartRad = state.concRotStart * (Math.PI / 180);
+            const rotEndRad = state.concRotEnd * (Math.PI / 180);
             
             for (let i = 0; i < totalCount; i++) {
+                // --- NEW: Skip first shape if spiral & log dist < 1.0 ---
+                if (state.angleOffsetMode === 'rotateCenters' && state.distLog < 1.0 && i === 0) {
+                    continue;
+                }
+                // -------------------------------------------------------
+
                 let t_index = (totalCount > 1) ? i / (totalCount - 1) : 0;
+                
+                // Rotation Interpolation
                 const t_log_angle = applyLogScale(t_index, state.angleOffsetLog);
-                const progressiveOffset = totalCount * t_log_angle * angleOffsetPerCircle;
+                const currentAngle = rotStartRad + (rotEndRad - rotStartRad) * t_log_angle;
+
                 const currentShapeBaseR = getInterpolatedBaseRadius(i, totalCount);
                 
                 let currentCenterR = 0;
@@ -1182,10 +1248,10 @@
                 if (state.angleOffsetMode === 'rotateCenters') {
                     const spiralMaxR = state.endRadius;
                     currentCenterR = applyLogScale(t_index, state.distLog) * spiralMaxR;
-                    shapeRotationAngle = progressiveOffset;
+                    shapeRotationAngle = currentAngle; // Spiral rotation
                 } else if (state.angleOffsetMode === 'rotateShapes') {
                     currentCenterR = 0; 
-                    shapeRotationAngle = progressiveOffset;
+                    shapeRotationAngle = currentAngle; // Shape twist
                 }
 
                 const currentAmp = getInterpolatedAmplitude(i, totalCount); 
@@ -1234,7 +1300,7 @@
             
             ctx.save();
             ctx.translate(centerX, centerY);
-            ctx.rotate(state.globalRotation * Math.PI / 180);
+            ctx.rotate(state.globalRotation * Math.PI / 180); 
             ctx.translate(-centerX, -centerY);
 
             if (state.layoutMode === 'radiating') {
@@ -1289,7 +1355,8 @@
             state.arrayRadius = parseFloat(controls.arrayRadius.value);
             state.count = parseInt(controls.count.value);
             state.concentricCount = parseInt(controls.concentricCount.value);
-            state.concentricAngleOffset = parseFloat(controls.concentricAngleOffset.value); 
+            state.concRotStart = parseInt(controls.concRotStart.value); // NEW
+            state.concRotEnd = parseInt(controls.concRotEnd.value); // NEW
             state.startRadius = parseInt(controls.startRadius.value); 
             state.endRadius = parseInt(controls.endRadius.value);
             state.numSpirals = parseInt(controls.numSpirals.value); 
@@ -1345,18 +1412,21 @@
                 controls.shapeMorphGroup.classList.add('hidden');
                 controls.randomLengthGroup.classList.remove('hidden');
                 controls.radialAngleGroup.classList.add('hidden');
-                controls.radialShapeRotGroup.classList.add('hidden'); // Hide Shape Rot
+                controls.radialShapeRotGroup.classList.add('hidden'); 
+                controls.concentricRotationGroup.classList.remove('hidden'); 
             } else if (state.layoutMode === 'radial') {
                 controls.shapeMorphGroup.classList.remove('hidden');
                 controls.randomLengthGroup.classList.add('hidden');
                 controls.radialAngleGroup.classList.remove('hidden');
-                controls.radialShapeRotGroup.classList.remove('hidden'); // Show Shape Rot
+                controls.radialShapeRotGroup.classList.remove('hidden'); 
+                controls.concentricRotationGroup.classList.add('hidden'); 
             } else {
                 // Concentric
                 controls.shapeMorphGroup.classList.remove('hidden');
                 controls.randomLengthGroup.classList.add('hidden');
                 controls.radialAngleGroup.classList.add('hidden');
-                controls.radialShapeRotGroup.classList.add('hidden'); // Hide Shape Rot
+                controls.radialShapeRotGroup.classList.add('hidden'); 
+                controls.concentricRotationGroup.classList.remove('hidden'); 
             }
             
             if (state.layoutMode === 'radial') {
@@ -1401,7 +1471,7 @@
                 controls.debugTools.classList.remove('fibonacci-hidden'); 
                 controls.count.max = 1000;
                 controls.radialAngleGroup.classList.add('hidden');
-                controls.radialShapeRotGroup.classList.add('hidden'); // Hide for complex spiral? Or keep? Let's hide to simplify.
+                controls.radialShapeRotGroup.classList.add('hidden'); 
                 handleSpiralTypeChange(); 
             } else {
                 if (labelTextSpan) labelTextSpan.textContent = 'Array Radius: '; 
@@ -1413,7 +1483,7 @@
                 controls.count.max = 100;
                 if(state.layoutMode === 'radial') {
                     controls.radialAngleGroup.classList.remove('hidden');
-                    controls.radialShapeRotGroup.classList.remove('hidden'); // Show for radial array
+                    controls.radialShapeRotGroup.classList.remove('hidden'); 
                 }
             }
             updateState();
@@ -1485,7 +1555,7 @@
         controls.pathLog.addEventListener('input', updateState);
         controls.drawPathCurve.addEventListener('change', updateState);
         controls.exportButton.addEventListener('click', handleExport);
-        controls.concentricAngleOffset.addEventListener('input', updateState);
+        // concentricAngleOffset removed
         controls.angleOffsetLog.addEventListener('input', updateState); 
         controls.targetRadios.forEach(radio => radio.addEventListener('change', handleTargetChange));
 
@@ -1523,7 +1593,6 @@
         controls.endAmp.value = 20; 
         controls.concentricCount.value = 60; 
         controls.distLog.value = 0.2;
-        controls.concentricAngleOffset.value = 0.06; 
         controls.angleOffsetLog.value = 1.00; 
         
         controls.startRadius.value = 20; 
@@ -1532,8 +1601,8 @@
         controls.startBaseRadius.value = 50; 
         controls.endBaseRadius.value = 50;   
         
-        controls.startLineWidth.value = 0.5;
-        controls.endLineWidth.value = 0.5;
+        controls.startLineWidth.value = 2.0; 
+        controls.endLineWidth.value = 2.0;   
         
         controls.startSides.value = 0; 
         controls.endSides.value = 4;   
@@ -1543,6 +1612,9 @@
         document.getElementById('typeFermat').checked = true;
 
         handleLayoutChange({ target: { value: 'concentric' } });
+        
+        // FINAL SAFETY CALL TO DRAW
+        updateState();
     </script>
 
 </body>
