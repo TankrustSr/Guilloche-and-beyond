@@ -28,13 +28,10 @@
             align-items: center;
             background-color: #000;
             overflow: hidden;
-            perspective: 1000px;
         }
         canvas {
             background-color: #000; 
             box-shadow: 0 0 50px rgba(255, 255, 255, 0.1);
-            transition: transform 0.1s linear;
-            transform-style: preserve-3d;
         }
         .control-group {
             margin-bottom: 20px;
@@ -63,15 +60,19 @@
             width: 100%;
             margin-top: 5px;
         }
-        input[type="number"], input[type="text"], select {
+        input[type="number"] {
+            width: 60px;
             padding: 2px 5px;
             border: 1px solid #ccc;
             border-radius: 3px;
             font-size: 14px;
-        }
-        input[type="number"] {
-            width: 60px;
             text-align: right;
+        }
+        input[type="text"], select {
+            padding: 2px 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-size: 14px;
         }
         input[type="text"] {
             width: 100%;
@@ -126,10 +127,6 @@
             color: #666;
             margin-left: 2px;
         }
-        #viewControls {
-            border-color: #2196F3;
-            background-color: #f0f8ff;
-        }
         .seed-btn {
             background-color: #eee;
             border: 1px solid #ccc;
@@ -171,27 +168,6 @@
             background-color: #2196F3;
             color: white;
             border-color: #1976D2;
-        }
-        
-        .collapsible-header {
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            user-select: none;
-        }
-        .collapsible-content {
-            overflow: hidden;
-            transition: max-height 0.2s ease-out;
-        }
-        .is-collapsed .collapsible-content {
-            display: none;
-        }
-        .arrow {
-            transition: transform 0.2s;
-        }
-        .is-collapsed .arrow {
-            transform: rotate(-90deg);
         }
         
         .group-title {
@@ -243,6 +219,11 @@
                 <input type="radio" id="radiating" name="layoutMode" value="radiating">
                 <label for="radiating">Radiating Lines</label>
             </div>
+        </div>
+        
+        <div class="control-group">
+            <label for="globalRotationNum">Global Rotation (Z-Axis): <input type="number" id="globalRotationNum" min="-179" max="179" step="1" value="0"></label>
+            <input type="range" id="globalRotation" min="-179" max="179" step="1" value="0">
         </div>
 
         <div class="control-group" id="baseRadiusGroup">
@@ -527,26 +508,6 @@
         
         <button id="exportButton">Export as SVG</button>
 
-        <div class="control-group is-collapsed" id="viewControls">
-            <div class="collapsible-header">
-                <label style="margin-bottom:0; cursor:pointer;">3D Canvas Orientation</label>
-                <span class="arrow">▼</span>
-            </div>
-            <div class="collapsible-content">
-                <label for="tiltXNum" style="font-weight:normal; margin-top:5px;">Tilt (X-Axis): <input type="number" id="tiltXNum" min="-85" max="85" step="1" value="0"></label>
-                <input type="range" id="tiltX" min="-85" max="85" step="1" value="0">
-
-                <label for="panYNum" style="font-weight:normal; margin-top:5px;">Pan (Y-Axis): <input type="number" id="panYNum" min="-85" max="85" step="1" value="0"></label>
-                <input type="range" id="panY" min="-85" max="85" step="1" value="0">
-                
-                <label for="perspectiveNum" style="font-weight:normal; margin-top:5px;">Perspective: <input type="number" id="perspectiveNum" min="200" max="2000" step="10" value="1000"></label>
-                <input type="range" id="perspective" min="200" max="2000" step="10" value="1000">
-                
-                <label for="globalRotationNum" style="margin-top:10px;">Global Rotation (Z-Axis): <input type="number" id="globalRotationNum" min="-179" max="179" step="1" value="0"></label>
-                <input type="range" id="globalRotation" min="-179" max="179" step="1" value="0">
-            </div>
-        </div>
-
     </div>
 
     <div id="canvasContainer">
@@ -570,12 +531,6 @@
         const MIN_POLYGON_SIDES = 3;
         const MAX_POLYGON_SIDES = 60;
         const RADIATING_LINE_SEGMENTS = 200; 
-
-        // Toggle collapsible
-        const viewHeader = document.querySelector('#viewControls .collapsible-header');
-        viewHeader.addEventListener('click', () => {
-            document.getElementById('viewControls').classList.toggle('is-collapsed');
-        });
 
         function linkInputs(rangeId, numberId) {
             const range = document.getElementById(rangeId);
@@ -611,9 +566,7 @@
             btnDeletePreset: document.getElementById('btnDeletePreset'),
             btnSavePreset: document.getElementById('btnSavePreset'),
             
-            tiltX: document.getElementById('tiltX'),
-            panY: document.getElementById('panY'),
-            perspective: document.getElementById('perspective'),
+            // 3D inputs removed
 
             freq: document.getElementById('freq'),
             phase: document.getElementById('phase'),
@@ -701,9 +654,6 @@
         const endRadiusLabelText = document.getElementById('endRadiusLabelText');
         const twistLabel = document.getElementById('twistLabel');
 
-        linkInputs('tiltX', 'tiltXNum');
-        linkInputs('panY', 'panYNum');
-        linkInputs('perspective', 'perspectiveNum');
         linkInputs('startLineWidth', 'startLineWidthNum');
         linkInputs('endLineWidth', 'endLineWidthNum');
         linkInputs('startRadius', 'startRadiusNum');
@@ -768,9 +718,9 @@
         let state = {
             startColor: controls.startColor.value,
             endColor: controls.endColor.value,
-            tiltX: parseInt(controls.tiltX.value) || 0,
-            panY: parseInt(controls.panY.value) || 0,
-            perspective: parseInt(controls.perspective.value) || 1000,
+            
+            // Removed tiltX, panY, perspective
+            
             freq: parseInt(controls.freq.value) || 50,
             phase: parseFloat(controls.phase.value) || 0,
             startAmp: parseFloat(controls.startAmp.value) || 0,
@@ -868,7 +818,7 @@
 
         function applyPresetState(loadedState) {
             // 1. Update State Object
-            state = { ...state, ...loadedState }; // Merge to ensure new props exist
+            state = { ...state, ...loadedState }; 
             
             // 2. Update UI Inputs to match State
             // Common inputs
@@ -877,7 +827,7 @@
             
             // Ranges/Numbers
             const numUpdates = [
-                'tiltX', 'panY', 'perspective', 'freq', 'phase', 'startAmp', 'endAmp',
+                 'freq', 'phase', 'startAmp', 'endAmp',
                 'startLineWidth', 'endLineWidth', 'ampLog', 'distLog', 'pathLog',
                 'angleOffsetLog', 'arrayRadius', 'count', 'concentricCount',
                 'concRotStart', 'concRotEnd', 'startRadius', 'endRadius', 'numSpirals',
@@ -918,8 +868,6 @@
             controls.seedDisplay.textContent = state.seed;
             
             // Trigger logic updates (visibility toggling etc)
-            // We need to manually call handleLayoutChange to update UI visibility
-            // Passing a dummy event object with target.value
             handleLayoutChange({ target: { value: state.layoutMode } });
             
             // Force redraw
@@ -1212,7 +1160,6 @@
 
             const globalStartR = state.startRadius;
             const globalEndR = state.endRadius;
-            
             const phaseNorm = state.phase / 2; 
             const rotStartRad = state.concRotStart * (Math.PI / 180);
             const rotEndRad = state.concRotEnd * (Math.PI / 180);
@@ -1223,37 +1170,47 @@
                 const seedMix = i * 1337 + state.seed * 7919; 
                 const r1 = seededRandom(seedMix); 
                 const r2 = seededRandom(seedMix + 9999);
-                if (state.randomLengthMode === 'start') {
-                    R_inner = globalStartR + r1 * (globalEndR - globalStartR);
-                    if(R_inner > R_outer) R_inner = R_outer - 1; 
-                } else if (state.randomLengthMode === 'end') {
-                    R_outer = globalStartR + r1 * (globalEndR - globalStartR);
-                    if(R_outer < R_inner) R_outer = R_inner + 1;
-                } else if (state.randomLengthMode === 'both') {
-                    let p1 = globalStartR + r1 * (globalEndR - globalStartR);
-                    let p2 = globalStartR + r2 * (globalEndR - globalStartR);
-                    R_inner = Math.min(p1, p2);
-                    R_outer = Math.max(p1, p2);
-                    if (R_outer - R_inner < 1) R_outer = R_inner + 5; 
-                }
+                
+                const rangeGlobal = globalEndR - globalStartR;
+                const offset1 = r1 * rangeGlobal * 0.9; 
+                const offset2 = r2 * rangeGlobal * 0.9;
 
-                const range = R_outer - R_inner;
+                if (state.randomLengthMode === 'start') {
+                    R_inner = globalStartR + offset1;
+                } else if (state.randomLengthMode === 'end') {
+                    R_outer = globalEndR - offset1;
+                } else if (state.randomLengthMode === 'both') {
+                    R_inner = globalStartR + offset1;
+                    R_outer = globalEndR - offset2;
+                    if (R_outer <= R_inner) {
+                         const mid = (globalStartR + globalEndR)/2;
+                         R_inner = mid - 10;
+                         R_outer = mid + 10;
+                    }
+                }
+                
+                const localRange = R_outer - R_inner;
                 const waveFn = waveforms[state.selectedWaveform];
                 let spinePoints = [];
                 const segments = RADIATING_LINE_SEGMENTS;
                 
                 for(let j = 0; j <= segments; j++) {
                     const t = j / segments; 
-                    const currentR = R_inner + (t * range);
+                    const currentR = R_inner + (t * localRange);
                     
-                    const twistT = applyLogScale(t, state.angleOffsetLog);
+                    let globalT = 0;
+                    if (rangeGlobal > 0) {
+                        globalT = (currentR - globalStartR) / rangeGlobal;
+                    }
+
+                    const twistT = applyLogScale(globalT, state.angleOffsetLog);
                     const twistAngle = rotStartRad + (rotEndRad - rotStartRad) * twistT;
 
-                    let t_amp_curve = t;
-                    if (state.ampLog !== 1.0) t_amp_curve = Math.pow(t, state.ampLog);
+                    let t_amp_curve = globalT; 
+                    if (state.ampLog !== 1.0) t_amp_curve = Math.pow(globalT, state.ampLog);
                     const currentSegmentAmp = state.startAmp + (state.endAmp - state.startAmp) * t_amp_curve;
 
-                    const modInput = (t * state.freq) + phaseNorm;
+                    const modInput = (globalT * state.freq) + phaseNorm;
                     const modValue = waveFn(modInput * Math.PI * 2, 0);
                     
                     let angleDisplacement = 0;
@@ -1265,7 +1222,7 @@
                     const x = centerX + Math.cos(finalAngle) * currentR;
                     const y = centerY + Math.sin(finalAngle) * currentR;
                     
-                    const currentWidth = state.startLineWidth + (state.endLineWidth - state.startLineWidth) * t;
+                    const currentWidth = state.startLineWidth + (state.endLineWidth - state.startLineWidth) * globalT;
                     spinePoints.push({x, y, w: currentWidth});
                 }
                 
@@ -1603,7 +1560,6 @@
 
             state.startColor = controls.startColor.value;
             state.endColor = controls.endColor.value;
-            // tiltX/panY removed
             
             state.freq = parseInt(controls.freq.value);
             state.phase = parseFloat(controls.phase.value);
@@ -1823,7 +1779,6 @@
         controls.pathLog.addEventListener('input', updateState);
         controls.drawPathCurve.addEventListener('change', updateState);
         controls.exportButton.addEventListener('click', handleExport);
-        // concentricAngleOffset removed
         controls.angleOffsetLog.addEventListener('input', updateState); 
         controls.targetRadios.forEach(radio => radio.addEventListener('change', handleTargetChange));
 
@@ -1886,6 +1841,7 @@
 
         handleLayoutChange({ target: { value: 'concentric' } });
         
+        // FINAL SAFETY CALL TO DRAW
         updateState();
     </script>
 
