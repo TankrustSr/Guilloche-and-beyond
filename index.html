@@ -170,6 +170,27 @@
             border-color: #1976D2;
         }
         
+        .collapsible-header {
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        .collapsible-content {
+            overflow: hidden;
+            transition: max-height 0.2s ease-out;
+        }
+        .is-collapsed .collapsible-content {
+            display: none;
+        }
+        .arrow {
+            transition: transform 0.2s;
+        }
+        .is-collapsed .arrow {
+            transform: rotate(-90deg);
+        }
+        
         .group-title {
             font-size: 1.1em;
             margin-bottom: 15px;
@@ -185,6 +206,13 @@
         #presetGroup {
             border-color: #607D8B;
             background-color: #eceff1;
+        }
+        
+        /* New Modulation Options Style */
+        #radiatingModOptions label {
+            font-weight: normal;
+            justify-content: flex-start;
+            gap: 10px;
         }
     </style>
 </head>
@@ -298,6 +326,32 @@
         <div class="control-group" id="modulationGroup">
             <label class="group-title">Modulation Settings</label>
 
+            <div class="sub-group" id="modTargetGroup">
+                <label>Modulation Target:</label>
+                <div class="radio-group">
+                    <input type="radio" id="targetSize" name="modTarget" value="size">
+                    <label for="targetSize">Shape Size</label>
+                    <input type="radio" id="targetOutline" name="modTarget" value="outline" checked>
+                    <label for="targetOutline">Shape Outline</label>
+                </div>
+            </div>
+
+            <div class="sub-group hidden" id="radiatingModOptions">
+                <label>Modulation Targets:</label>
+                <div style="margin-left: 5px;">
+                    <input type="checkbox" id="modLineShape" checked>
+                    <label for="modLineShape" style="display:inline;">Bend Line (Shape)</label>
+                </div>
+                <div style="margin-left: 5px;">
+                    <input type="checkbox" id="modStartRadius">
+                    <label for="modStartRadius" style="display:inline;">Modulate Start Radius</label>
+                </div>
+                <div style="margin-left: 5px;">
+                    <input type="checkbox" id="modEndRadius">
+                    <label for="modEndRadius" style="display:inline;">Modulate End Radius</label>
+                </div>
+            </div>
+
             <div class="sub-group">
                 <label>Waveform:</label>
                 <div class="radio-group">
@@ -309,8 +363,8 @@
                     <label for="sawtooth">Saw.</label>
                     <input type="radio" id="triangle" name="waveform" value="triangle">
                     <label for="triangle">Tri.</label>
-                    <input type="radio" id="samplehold" name="waveform" value="samplehold">
-                    <label for="samplehold">S&H</label>
+                    <input type="radio" id="noise" name="waveform" value="noise">
+                    <label for="noise">Noise</label>
                 </div>
                 <div id="dutyCycleGroup" class="hidden">
                     <label for="dutyCycleNum" style="font-weight:normal;">Square Duty Cycle (%): <input type="number" id="dutyCycleNum" min="0.01" max="0.99" step="0.01" value="0.50"></label>
@@ -420,16 +474,6 @@
             <label for="arrayEndAngleNum" style="font-weight:normal; margin-top:5px;">End Angle (°): <input type="number" id="arrayEndAngleNum" min="0" max="360" step="1" value="360"></label>
             <input type="range" id="arrayEndAngle" min="0" max="360" step="1" value="360">
         </div>
-
-        <div class="control-group" id="modTargetGroup">
-            <label>Modulation Target:</label>
-            <div class="radio-group">
-                <input type="radio" id="targetSize" name="modTarget" value="size">
-                <label for="targetSize">Shape Size</label>
-                <input type="radio" id="targetOutline" name="modTarget" value="outline" checked>
-                <label for="targetOutline">Shape Outline</label>
-            </div>
-        </div>
         
         <div class="control-group" id="shapeMorphGroup">
             <label id="shapeMorphLabel">Shape Morphing:</label>
@@ -508,6 +552,23 @@
         
         <button id="exportButton">Export as SVG</button>
 
+        <div class="control-group is-collapsed" id="viewControls">
+            <div class="collapsible-header">
+                <label style="margin-bottom:0; cursor:pointer;">3D Canvas Orientation</label>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="collapsible-content">
+                <label for="tiltXNum" style="font-weight:normal; margin-top:5px;">Tilt (X-Axis): <input type="number" id="tiltXNum" min="-85" max="85" step="1" value="0"></label>
+                <input type="range" id="tiltX" min="-85" max="85" step="1" value="0">
+
+                <label for="panYNum" style="font-weight:normal; margin-top:5px;">Pan (Y-Axis): <input type="number" id="panYNum" min="-85" max="85" step="1" value="0"></label>
+                <input type="range" id="panY" min="-85" max="85" step="1" value="0">
+                
+                <label for="perspectiveNum" style="font-weight:normal; margin-top:5px;">Perspective: <input type="number" id="perspectiveNum" min="200" max="2000" step="10" value="1000"></label>
+                <input type="range" id="perspective" min="200" max="2000" step="10" value="1000">
+            </div>
+        </div>
+
     </div>
 
     <div id="canvasContainer">
@@ -531,6 +592,12 @@
         const MIN_POLYGON_SIDES = 3;
         const MAX_POLYGON_SIDES = 60;
         const RADIATING_LINE_SEGMENTS = 200; 
+
+        // Toggle collapsible
+        const viewHeader = document.querySelector('#viewControls .collapsible-header');
+        viewHeader.addEventListener('click', () => {
+            document.getElementById('viewControls').classList.toggle('is-collapsed');
+        });
 
         function linkInputs(rangeId, numberId) {
             const range = document.getElementById(rangeId);
@@ -566,7 +633,9 @@
             btnDeletePreset: document.getElementById('btnDeletePreset'),
             btnSavePreset: document.getElementById('btnSavePreset'),
             
-            // 3D inputs removed
+            tiltX: document.getElementById('tiltX'),
+            panY: document.getElementById('panY'),
+            perspective: document.getElementById('perspective'),
 
             freq: document.getElementById('freq'),
             phase: document.getElementById('phase'),
@@ -648,12 +717,21 @@
             trailZ: document.getElementById('trailZ'),
             trailZNum: document.getElementById('trailZNum'),
             glowEnabled: document.getElementById('glowEnabled'),
+
+            // Mod Controls
+            radiatingModOptions: document.getElementById('radiatingModOptions'),
+            modLineShape: document.getElementById('modLineShape'),
+            modStartRadius: document.getElementById('modStartRadius'),
+            modEndRadius: document.getElementById('modEndRadius'),
         };
         
         const startRadiusLabelText = document.getElementById('startRadiusLabelText');
         const endRadiusLabelText = document.getElementById('endRadiusLabelText');
         const twistLabel = document.getElementById('twistLabel');
 
+        linkInputs('tiltX', 'tiltXNum');
+        linkInputs('panY', 'panYNum');
+        linkInputs('perspective', 'perspectiveNum');
         linkInputs('startLineWidth', 'startLineWidthNum');
         linkInputs('endLineWidth', 'endLineWidthNum');
         linkInputs('startRadius', 'startRadiusNum');
@@ -696,14 +774,35 @@
             },
             sawtooth: (t, phase) => ((t + phase / Math.PI / 2) % 1) * 2 - 1, 
             triangle: (t, phase) => 2 * Math.abs(((t + phase) / (Math.PI * 2)) % 1 - 0.5) * 2 - 1,
-            _sampleValues: {}, 
             samplehold: (t, phase) => {
+                 // Keeping samplehold for compatibility but user sees "Noise" now
                 const f = 1; 
                 const key = Math.floor((t + phase) / f);
                 if (!waveforms._sampleValues.hasOwnProperty(key)) {
                     waveforms._sampleValues[key] = Math.random() * 2 - 1; 
                 }
                 return waveforms._sampleValues[key];
+            },
+            _sampleValues: {},
+            
+            // NEW NOISE WAVEFORM (Value Noise)
+            noise: (t, phase) => {
+                 // Map input to a continuous but random-looking signal
+                 // t + phase will be our coordinate
+                 const x = (t + phase) / Math.PI; // Scaling factor
+                 const i = Math.floor(x);
+                 const f = x - i;
+                 
+                 // Smoothstep interpolation
+                 const u = f * f * (3.0 - 2.0 * f);
+                 
+                 // Deterministic random based on integer step
+                 const r1 = seededRandom(i);
+                 const r2 = seededRandom(i + 1);
+                 
+                 // Map 0..1 to -1..1
+                 const val = (r1 * (1 - u) + r2 * u);
+                 return val * 2 - 1; 
             }
         };
 
@@ -718,9 +817,9 @@
         let state = {
             startColor: controls.startColor.value,
             endColor: controls.endColor.value,
-            
-            // Removed tiltX, panY, perspective
-            
+            tiltX: parseInt(controls.tiltX.value) || 0,
+            panY: parseInt(controls.panY.value) || 0,
+            perspective: parseInt(controls.perspective.value) || 1000,
             freq: parseInt(controls.freq.value) || 50,
             phase: parseFloat(controls.phase.value) || 0,
             startAmp: parseFloat(controls.startAmp.value) || 0,
@@ -767,6 +866,11 @@
             trailDecay: parseFloat(controls.trailDecay.value) || 0.10,
             trailZ: parseInt(controls.trailZ.value) || 0,
             glowEnabled: controls.glowEnabled.checked,
+            
+            // Mod Options
+            modLineShape: true,
+            modStartRadius: false,
+            modEndRadius: false
         };
         
         // ----- PRESET MANAGER LOGIC -----
@@ -775,10 +879,7 @@
         function loadPresetsFromLS() {
             const saved = localStorage.getItem(PRESET_KEY);
             const presets = saved ? JSON.parse(saved) : {};
-            
-            // Clear except default option
             controls.presetSelect.innerHTML = '<option value="" disabled selected>Select Preset...</option>';
-            
             Object.keys(presets).sort().forEach(name => {
                 const option = document.createElement('option');
                 option.value = name;
@@ -794,20 +895,17 @@
                 alert("Please enter a preset name.");
                 return;
             }
-            
             const presets = loadPresetsFromLS();
-            presets[name] = JSON.parse(JSON.stringify(state)); // Deep copy current state
-            
+            presets[name] = JSON.parse(JSON.stringify(state)); 
             localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
-            loadPresetsFromLS(); // Refresh dropdown
-            controls.presetSelect.value = name; // Select newly saved
-            controls.presetName.value = ""; // Clear input
+            loadPresetsFromLS(); 
+            controls.presetSelect.value = name; 
+            controls.presetName.value = ""; 
         }
 
         function deletePreset() {
             const name = controls.presetSelect.value;
             if (!name) return;
-            
             if (confirm(`Delete preset "${name}"?`)) {
                 const presets = loadPresetsFromLS();
                 delete presets[name];
@@ -817,17 +915,12 @@
         }
 
         function applyPresetState(loadedState) {
-            // 1. Update State Object
             state = { ...state, ...loadedState }; 
-            
-            // 2. Update UI Inputs to match State
-            // Common inputs
             controls.startColor.value = state.startColor;
             controls.endColor.value = state.endColor;
             
-            // Ranges/Numbers
             const numUpdates = [
-                 'freq', 'phase', 'startAmp', 'endAmp',
+                'tiltX', 'panY', 'perspective', 'freq', 'phase', 'startAmp', 'endAmp',
                 'startLineWidth', 'endLineWidth', 'ampLog', 'distLog', 'pathLog',
                 'angleOffsetLog', 'arrayRadius', 'count', 'concentricCount',
                 'concRotStart', 'concRotEnd', 'startRadius', 'endRadius', 'numSpirals',
@@ -837,15 +930,13 @@
             ];
             
             numUpdates.forEach(key => {
-                if (controls[key]) { // Check if control exists
+                if (controls[key]) { 
                    controls[key].value = state[key];
-                   // Also update the linked number input if it exists
                    const numInput = document.getElementById(key + 'Num');
                    if (numInput) numInput.value = state[key];
                 }
             });
             
-            // Radios
             const setRadio = (name, val) => {
                 const radios = document.querySelectorAll(`input[name="${name}"]`);
                 radios.forEach(r => r.checked = (r.value === val));
@@ -859,18 +950,15 @@
             setRadio('gradientMode', state.gradientMode);
             setRadio('randomLengthMode', state.randomLengthMode);
             
-            // Checkboxes
             controls.drawPathCurve.checked = state.drawPathCurve;
             controls.trailsEnabled.checked = state.trailsEnabled;
             controls.glowEnabled.checked = state.glowEnabled;
+            controls.modLineShape.checked = state.modLineShape;
+            controls.modStartRadius.checked = state.modStartRadius;
+            controls.modEndRadius.checked = state.modEndRadius;
             
-            // Seed Display
             controls.seedDisplay.textContent = state.seed;
-            
-            // Trigger logic updates (visibility toggling etc)
             handleLayoutChange({ target: { value: state.layoutMode } });
-            
-            // Force redraw
             updateState();
         }
 
@@ -885,9 +973,7 @@
             }
         });
         
-        // Initialize Presets on Load
         loadPresetsFromLS();
-        // --------------------------------
 
         let isAnimating = false;
         let animDirection = 1; 
@@ -927,11 +1013,14 @@
             controls.animRev.classList.remove('selected');
         });
         
-        // FX Listeners
         controls.trailsEnabled.addEventListener('change', updateState);
         controls.trailDecay.addEventListener('input', updateState);
         controls.trailZ.addEventListener('input', updateState);
         controls.glowEnabled.addEventListener('change', updateState);
+        
+        controls.modLineShape.addEventListener('change', updateState);
+        controls.modStartRadius.addEventListener('change', updateState);
+        controls.modEndRadius.addEventListener('change', updateState);
 
 
         function hexToRgb(hex) {
@@ -1050,7 +1139,6 @@
         function drawDistortedCircle(center, baseR, currentAmplitude, currentLineWidth, currentColor, svgElements, angleOffset = 0) {
             const segments = svgElements ? EXPORT_SEGMENTS : SCREEN_SEGMENTS;
             const distortionAmp = currentAmplitude * 0.05; 
-            
             const phaseNorm = state.phase / 2; 
             const cycles = state.freq;
             let points = []; 
@@ -1171,26 +1259,53 @@
                 const r1 = seededRandom(seedMix); 
                 const r2 = seededRandom(seedMix + 9999);
                 
-                const rangeGlobal = globalEndR - globalStartR;
-                const offset1 = r1 * rangeGlobal * 0.9; 
-                const offset2 = r2 * rangeGlobal * 0.9;
+                // Apply Random Length Logic
+                if (state.randomLengthMode !== 'none') {
+                    const rangeGlobal = globalEndR - globalStartR;
+                    const offset1 = r1 * rangeGlobal * 0.9; 
+                    const offset2 = r2 * rangeGlobal * 0.9;
 
-                if (state.randomLengthMode === 'start') {
-                    R_inner = globalStartR + offset1;
-                } else if (state.randomLengthMode === 'end') {
-                    R_outer = globalEndR - offset1;
-                } else if (state.randomLengthMode === 'both') {
-                    R_inner = globalStartR + offset1;
-                    R_outer = globalEndR - offset2;
-                    if (R_outer <= R_inner) {
-                         const mid = (globalStartR + globalEndR)/2;
-                         R_inner = mid - 10;
-                         R_outer = mid + 10;
+                    if (state.randomLengthMode === 'start') {
+                        R_inner = globalStartR + offset1;
+                    } else if (state.randomLengthMode === 'end') {
+                        R_outer = globalEndR - offset1;
+                    } else if (state.randomLengthMode === 'both') {
+                        R_inner = globalStartR + offset1;
+                        R_outer = globalEndR - offset2;
+                        if (R_outer <= R_inner) {
+                             const mid = (globalStartR + globalEndR)/2;
+                             R_inner = mid - 10;
+                             R_outer = mid + 10;
+                        }
                     }
                 }
                 
-                const localRange = R_outer - R_inner;
+                // Apply Modulation Logic
+                // Calculate line-based modulation factor
+                let modLineFactor = 0;
+                
+                // Use a consistent coordinate for the line's noise/sine pickup
+                // For radiating lines, 'i' is the angular index.
+                const t_line_index = i / N;
+                // For modulation, we can use (t_line_index * freq) + phaseNorm
+                // This makes the modulation ripple AROUND the circle
+                
+                const modInputLine = (t_line_index * state.freq) + phaseNorm;
                 const waveFn = waveforms[state.selectedWaveform];
+                const modValueLine = waveFn(modInputLine * Math.PI * 2, 0); 
+                
+                // Apply Start/End Modulation
+                if (state.modStartRadius) {
+                     // Use Start Amplitude to affect Inner Radius
+                     R_inner += modValueLine * state.startAmp; 
+                }
+                
+                if (state.modEndRadius) {
+                     // Use End Amplitude to affect Outer Radius
+                     R_outer += modValueLine * state.endAmp;
+                }
+
+                const localRange = R_outer - R_inner;
                 let spinePoints = [];
                 const segments = RADIATING_LINE_SEGMENTS;
                 
@@ -1199,6 +1314,7 @@
                     const currentR = R_inner + (t * localRange);
                     
                     let globalT = 0;
+                    const rangeGlobal = globalEndR - globalStartR;
                     if (rangeGlobal > 0) {
                         globalT = (currentR - globalStartR) / rangeGlobal;
                     }
@@ -1206,16 +1322,21 @@
                     const twistT = applyLogScale(globalT, state.angleOffsetLog);
                     const twistAngle = rotStartRad + (rotEndRad - rotStartRad) * twistT;
 
-                    let t_amp_curve = globalT; 
-                    if (state.ampLog !== 1.0) t_amp_curve = Math.pow(globalT, state.ampLog);
-                    const currentSegmentAmp = state.startAmp + (state.endAmp - state.startAmp) * t_amp_curve;
-
-                    const modInput = (globalT * state.freq) + phaseNorm;
-                    const modValue = waveFn(modInput * Math.PI * 2, 0);
-                    
                     let angleDisplacement = 0;
-                    if (currentR > 0.1) {
-                         angleDisplacement = (modValue * currentSegmentAmp * 0.5) / currentR; 
+                    
+                    // Apply Shape Bend Modulation ONLY if enabled
+                    if (state.modLineShape) {
+                        let t_amp_curve = globalT; 
+                        if (state.ampLog !== 1.0) t_amp_curve = Math.pow(globalT, state.ampLog);
+                        const currentSegmentAmp = state.startAmp + (state.endAmp - state.startAmp) * t_amp_curve;
+
+                        // For bending, modulation moves OUTWARD along the line
+                        const modInputBend = (globalT * state.freq) + phaseNorm;
+                        const modValueBend = waveFn(modInputBend * Math.PI * 2, 0);
+                        
+                        if (currentR > 0.1) {
+                             angleDisplacement = (modValueBend * currentSegmentAmp * 0.5) / currentR; 
+                        }
                     }
                     
                     const finalAngle = twistAngle + angleDisplacement + (i / N) * Math.PI * 2;
@@ -1605,6 +1726,10 @@
             state.trailDecay = parseFloat(controls.trailDecay.value);
             state.trailZ = parseInt(controls.trailZ.value);
             state.glowEnabled = controls.glowEnabled.checked;
+            
+            state.modLineShape = controls.modLineShape.checked;
+            state.modStartRadius = controls.modStartRadius.checked;
+            state.modEndRadius = controls.modEndRadius.checked;
 
             if (controls.startSidesLabelSpan) controls.startSidesLabelSpan.textContent = formatSideValue(state.startSides);
             if (controls.endSidesLabelSpan) controls.endSidesLabelSpan.textContent = formatSideValue(state.endSides);
@@ -1630,6 +1755,7 @@
             controls.radialControls.classList.add('hidden');
             controls.concentricControls.classList.add('hidden');
             controls.modTargetGroup.classList.remove('hidden');
+            controls.radiatingModOptions.classList.add('hidden'); // Hide by default
             
             // Toggle Groups Based on Mode
             if (state.layoutMode === 'radiating') {
@@ -1638,6 +1764,7 @@
                 controls.radialAngleGroup.classList.add('hidden');
                 controls.radialShapeRotGroup.classList.add('hidden'); 
                 controls.concentricRotationGroup.classList.remove('hidden'); 
+                controls.radiatingModOptions.classList.remove('hidden'); // Show Mod Options
             } else if (state.layoutMode === 'radial') {
                 controls.shapeMorphGroup.classList.remove('hidden');
                 controls.randomLengthGroup.classList.add('hidden');
@@ -1779,6 +1906,7 @@
         controls.pathLog.addEventListener('input', updateState);
         controls.drawPathCurve.addEventListener('change', updateState);
         controls.exportButton.addEventListener('click', handleExport);
+        // concentricAngleOffset removed
         controls.angleOffsetLog.addEventListener('input', updateState); 
         controls.targetRadios.forEach(radio => radio.addEventListener('change', handleTargetChange));
 
