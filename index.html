@@ -96,27 +96,32 @@
             border: none;
             cursor: pointer;
         }
-        #exportButton {
-            width: 100%;
+        
+        /* Export Buttons */
+        .export-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+        .export-btn {
+            flex: 1;
             padding: 10px;
-            background-color: #4CAF50;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            font-size: 16px;
-            margin-top: 10px;
-            margin-bottom: 20px; 
+            font-size: 14px;
+            text-align: center;
         }
-        #exportButton:hover {
-            background-color: #45a049;
-        }
-        .hidden {
-            display: none;
-        }
-        .morph-control {
-            margin-top: 10px;
-        }
+        #exportSVG { background-color: #4CAF50; }
+        #exportSVG:hover { background-color: #45a049; }
+        #exportPNG { background-color: #2196F3; }
+        #exportPNG:hover { background-color: #1e88e5; }
+        #exportPNG:disabled { background-color: #90CAF9; cursor: wait; }
+
+        .hidden { display: none; }
+        .morph-control { margin-top: 10px; }
         #dutyCycleGroup {
             margin-top: 10px;
             padding: 5px;
@@ -138,13 +143,8 @@
             font-weight: bold;
             font-size: 12px;
         }
-        .seed-btn:hover {
-            background-color: #ddd;
-        }
-        .seed-btn.active {
-            background-color: #bbb;
-            box-shadow: inset 0 0 3px rgba(0,0,0,0.2);
-        }
+        .seed-btn:hover { background-color: #ddd; }
+        
         .anim-btn {
             background-color: #f8f8f8;
             border: 1px solid #ccc;
@@ -154,9 +154,7 @@
             font-size: 12px;
             font-weight: bold;
         }
-        .anim-btn:hover {
-            background-color: #e0e0e0;
-        }
+        .anim-btn:hover { background-color: #e0e0e0; }
         .anim-btn.active {
             background-color: #4CAF50;
             color: white;
@@ -171,6 +169,7 @@
             color: white;
             border-color: #1976D2;
         }
+        
         .record-btn {
             width: 100%;
             padding: 10px;
@@ -182,13 +181,8 @@
             font-size: 16px;
             margin-top: 5px;
         }
-        .record-btn:hover {
-            background-color: #C2185B;
-        }
-        .record-btn:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
+        .record-btn:hover { background-color: #C2185B; }
+        .record-btn:disabled { background-color: #ccc; cursor: not-allowed; }
         
         .group-title {
             font-size: 1.1em;
@@ -211,6 +205,7 @@
             background-color: #fce4ec;
         }
         
+        /* Progress Bar */
         #recProgressContainer {
             width: 100%;
             height: 5px;
@@ -229,6 +224,28 @@
             justify-content: space-between;
             margin-bottom: 10px;
             gap: 5px;
+        }
+        
+        /* Collapsible */
+        .collapsible-header {
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        .collapsible-content {
+            overflow: hidden;
+            transition: max-height 0.2s ease-out;
+        }
+        .is-collapsed .collapsible-content {
+            display: none;
+        }
+        .arrow {
+            transition: transform 0.2s;
+        }
+        .is-collapsed .arrow {
+            transform: rotate(-90deg);
         }
     </style>
 </head>
@@ -298,18 +315,14 @@
         
         <div class="control-group" id="fxGroup">
             <label class="group-title">Visual Effects (FX)</label>
-            
             <div style="margin-bottom: 10px;">
                 <input type="checkbox" id="trailsEnabled">
                 <label for="trailsEnabled" style="display:inline;">Enable Trails / Glow</label>
             </div>
-            
             <label for="trailDecayNum" style="font-weight:normal; font-size:0.9em;">Trail Decay (Fade Speed): <input type="number" id="trailDecayNum" min="0.01" max="0.99" step="0.01" value="0.10"></label>
             <input type="range" id="trailDecay" min="0.01" max="0.99" step="0.01" value="0.10">
-            
             <label for="trailZNum" style="font-weight:normal; font-size:0.9em; margin-top:5px;">Negative Z Flow Speed: <input type="number" id="trailZNum" min="0" max="50" step="1" value="0"></label>
             <input type="range" id="trailZ" min="0" max="50" step="1" value="0">
-            
             <div style="margin-top: 10px;">
                 <input type="checkbox" id="glowEnabled">
                 <label for="glowEnabled" style="display:inline;">Additive Glow Mode</label>
@@ -351,7 +364,7 @@
                     <label for="targetOutline">Shape Outline</label>
                 </div>
             </div>
-
+            
             <div class="sub-group hidden" id="radiatingModOptions">
                 <label>Modulation Targets:</label>
                 <div style="margin-left: 5px;">
@@ -374,11 +387,11 @@
                     <input type="radio" id="sine" name="waveform" value="sine" checked>
                     <label for="sine">Sine</label>
                     <input type="radio" id="square" name="waveform" value="square">
-                    <label for="square">Sq.</label>
+                    <label for="square">Square</label>
                     <input type="radio" id="sawtooth" name="waveform" value="sawtooth">
-                    <label for="sawtooth">Saw.</label>
+                    <label for="sawtooth">Sawtooth</label>
                     <input type="radio" id="triangle" name="waveform" value="triangle">
-                    <label for="triangle">Tri.</label>
+                    <label for="triangle">Triangle</label>
                     <input type="radio" id="noise" name="waveform" value="noise">
                     <label for="noise">Noise</label>
                 </div>
@@ -400,7 +413,6 @@
                         <button id="animFwd" class="anim-btn anim-dir-btn selected" title="Forward">»</button>
                     </div>
                 </div>
-                
                 <div style="display: flex; align-items: center; gap: 5px; margin-top:5px;">
                     <input type="range" id="phase" min="0" max="2" step="0.001" value="0" style="flex-grow:1;">
                     <input type="number" id="phaseNum" min="0" max="2" step="0.01" value="0">
@@ -408,15 +420,14 @@
             </div>
 
             <div class="sub-group">
-                <label>Amplitude:</label>
-                <label for="startAmpNum" style="font-weight:normal; font-size: 0.9em;">Start (Inner): <input type="number" id="startAmpNum" min="0" max="500" step="1" value="0"></label>
+                <label for="ampLogNum">Amplitude Log Dist: <input type="number" id="ampLogNum" min="0.1" max="5" step="0.01" value="1.0"></label>
+                <input type="range" id="ampLog" min="0.1" max="5" step="0.01" value="1.0">
+
+                <label for="startAmpNum" style="margin-top:10px;">Start Amplitude (Inner): <input type="number" id="startAmpNum" min="0" max="500" step="1" value="0"></label>
                 <input type="range" id="startAmp" min="0" max="500" step="1" value="0">
                 
-                <label for="endAmpNum" style="font-weight:normal; font-size: 0.9em; margin-top:5px;">End (Outer): <input type="number" id="endAmpNum" min="0" max="500" step="1" value="40"></label>
+                <label for="endAmpNum">End Amplitude (Outer): <input type="number" id="endAmpNum" min="0" max="500" step="1" value="40"></label>
                 <input type="range" id="endAmp" min="0" max="500" step="1" value="40">
-
-                <label for="ampLogNum" style="font-weight:normal; font-size: 0.9em; margin-top:5px;">Amp Log Dist: <input type="number" id="ampLogNum" min="0.1" max="5" step="0.01" value="1.0"></label>
-                <input type="range" id="ampLog" min="0.1" max="5" step="0.01" value="1.0">
             </div>
         </div>
 
@@ -490,7 +501,7 @@
             <label for="arrayEndAngleNum" style="font-weight:normal; margin-top:5px;">End Angle (°): <input type="number" id="arrayEndAngleNum" min="0" max="360" step="1" value="360"></label>
             <input type="range" id="arrayEndAngle" min="0" max="360" step="1" value="360">
         </div>
-        
+
         <div class="control-group" id="shapeMorphGroup">
             <label id="shapeMorphLabel">Shape Morphing:</label>
             <div class="morph-control">
@@ -502,7 +513,7 @@
                 <input type="range" id="endSides" min="0" max="60" step="1" value="0">
             </div>
         </div>
-
+        
         <div class="control-group hidden" id="radialControls">
             <label>Array Path Curve:</label>
             <div class="radio-group">
@@ -566,7 +577,10 @@
             </div>
         </div>
         
-        <button id="exportButton">Export as SVG</button>
+        <div class="export-group">
+            <button id="exportSVG" class="export-btn">Export SVG</button>
+            <button id="exportPNG" class="export-btn">Export PNG (4K)</button>
+        </div>
         
         <div class="control-group" id="recordingControls">
             <label class="group-title">Video Export</label>
@@ -609,6 +623,7 @@
         const SPIRAL_DEBUG_SEGMENTS = 500; 
         const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5)); 
         const MAX_CANVAS_RADIUS = Math.min(W, H) / 2; 
+
         const SCREEN_SEGMENTS = 1200; 
         const EXPORT_SEGMENTS = 3600;
         const MIN_POLYGON_SIDES = 3;
@@ -641,16 +656,23 @@
         const controls = {
             startColor: document.getElementById('startColor'),
             endColor: document.getElementById('endColor'),
+            
+            // Presets
             presetSelect: document.getElementById('presetSelect'),
             presetName: document.getElementById('presetName'),
             btnLoadPreset: document.getElementById('btnLoadPreset'),
             btnDeletePreset: document.getElementById('btnDeletePreset'),
             btnSavePreset: document.getElementById('btnSavePreset'),
+            
+            // Recording / Export
             recQuality: document.getElementById('recQuality'),
             warmupCycles: document.getElementById('warmupCycles'),
             btnRecordLoop: document.getElementById('btnRecordLoop'),
             recProgressContainer: document.getElementById('recProgressContainer'),
             recProgressBar: document.getElementById('recProgressBar'),
+            exportSVG: document.getElementById('exportSVG'),
+            exportPNG: document.getElementById('exportPNG'),
+
             freq: document.getElementById('freq'),
             phase: document.getElementById('phase'),
             startAmp: document.getElementById('startAmp'),
@@ -677,6 +699,7 @@
             dutyCycle: document.getElementById('dutyCycle'),
             gradientDivisions: document.getElementById('gradientDivisions'), 
             globalRotation: document.getElementById('globalRotation'),
+
             drawPathCurve: document.getElementById('drawPathCurve'), 
             waveformRadios: document.querySelectorAll('input[name="waveform"]'),
             layoutRadios: document.querySelectorAll('input[name="layoutMode"]'),
@@ -693,7 +716,6 @@
             pathLogGroup: document.getElementById('pathLogGroup'),
             distLogGroup: document.getElementById('distLogGroup'), 
             debugTools: document.getElementById('debugTools'),
-            exportButton: document.getElementById('exportButton'),
             startSidesLabelSpan: document.getElementById('startSidesLabel'),
             endSidesLabelSpan: document.getElementById('endSidesLabel'),
             angleOffsetModeRadios: document.querySelectorAll('input[name="angleOffsetMode"]'),
@@ -717,15 +739,21 @@
             radialRotStart: document.getElementById('radialRotStart'), 
             radialRotEnd: document.getElementById('radialRotEnd'), 
             concentricRotationGroup: document.getElementById('concentricRotationGroup'), 
+            
+            // Anim Controls
             animToggle: document.getElementById('animToggle'),
             animRev: document.getElementById('animRev'),
             animFwd: document.getElementById('animFwd'),
+            
+            // FX
             trailsEnabled: document.getElementById('trailsEnabled'),
             trailDecay: document.getElementById('trailDecay'),
             trailDecayNum: document.getElementById('trailDecayNum'),
             trailZ: document.getElementById('trailZ'),
             trailZNum: document.getElementById('trailZNum'),
             glowEnabled: document.getElementById('glowEnabled'),
+            
+            // Mod Checkboxes
             radiatingModOptions: document.getElementById('radiatingModOptions'),
             modLineShape: document.getElementById('modLineShape'),
             modStartRadius: document.getElementById('modStartRadius'),
@@ -734,7 +762,7 @@
         
         const startRadiusLabelText = document.getElementById('startRadiusLabelText');
         const endRadiusLabelText = document.getElementById('endRadiusLabelText');
-        const twistLabel = document.getElementById('twistLabel');
+        const twistLabel = document.getElementById('twistLabel'); // May not exist in all modes
 
         linkInputs('startLineWidth', 'startLineWidthNum');
         linkInputs('endLineWidth', 'endLineWidthNum');
@@ -778,20 +806,15 @@
             },
             sawtooth: (t, phase) => ((t + phase / Math.PI / 2) % 1) * 2 - 1, 
             triangle: (t, phase) => 2 * Math.abs(((t + phase) / (Math.PI * 2)) % 1 - 0.5) * 2 - 1,
-            samplehold: (t, phase) => {
-                const f = 1; 
-                const key = Math.floor((t + phase) / f);
-                if (!waveforms._sampleValues.hasOwnProperty(key)) {
-                    waveforms._sampleValues[key] = Math.random() * 2 - 1; 
-                }
-                return waveforms._sampleValues[key];
-            },
+            // Replaced S&H with Noise but keeping placeholder if needed for old presets (mapped to noise)
+            samplehold: (t, phase) => waveforms.noise(t, phase),
             _sampleValues: {},
+            // NOISE IMPLEMENTATION (Value Noise)
             noise: (t, phase) => {
                  const x = (t + phase) / Math.PI; 
                  const i = Math.floor(x);
                  const f = x - i;
-                 const u = f * f * (3.0 - 2.0 * f);
+                 const u = f * f * (3.0 - 2.0 * f); // Smoothstep
                  const r1 = seededRandom(i);
                  const r2 = seededRandom(i + 1);
                  const val = (r1 * (1 - u) + r2 * u);
@@ -806,10 +829,10 @@
             return ((t ^ t >>> 14) >>> 0) / 4294967296;
         }
 
+        // Initialize state
         let state = {
             startColor: controls.startColor.value,
             endColor: controls.endColor.value,
-            
             freq: parseInt(controls.freq.value) || 50,
             phase: parseFloat(controls.phase.value) || 0,
             startAmp: parseFloat(controls.startAmp.value) || 0,
@@ -851,17 +874,21 @@
             globalRotation: parseInt(controls.globalRotation.value) || 0,
             gradientMode: 'angular',
             
+            // FX
             trailsEnabled: controls.trailsEnabled.checked,
             trailDecay: parseFloat(controls.trailDecay.value) || 0.10,
             trailZ: parseInt(controls.trailZ.value) || 0,
             glowEnabled: controls.glowEnabled.checked,
             
+            // Radiating Mod Options
             modLineShape: controls.modLineShape.checked,
             modStartRadius: controls.modStartRadius.checked,
             modEndRadius: controls.modEndRadius.checked
         };
         
+        // ----- PRESET MANAGER -----
         const PRESET_KEY = 'genArtPresets';
+
         function loadPresetsFromLS() {
             const saved = localStorage.getItem(PRESET_KEY);
             const presets = saved ? JSON.parse(saved) : {};
@@ -951,13 +978,13 @@
             const name = controls.presetSelect.value;
             if (!name) return;
             const presets = loadPresetsFromLS();
-            if (presets[name]) {
-                applyPresetState(presets[name]);
-            }
+            if (presets[name]) applyPresetState(presets[name]);
         });
         
+        // Initialize
         loadPresetsFromLS();
 
+        // --- ANIMATION LOOP ---
         let isAnimating = false;
         let animDirection = 1; 
         let animationId = null;
@@ -1003,128 +1030,7 @@
         controls.modLineShape.addEventListener('change', updateState);
         controls.modStartRadius.addEventListener('change', updateState);
         controls.modEndRadius.addEventListener('change', updateState);
-        
-        // --- NEW RECORDING LOGIC ---
-        controls.btnRecordLoop.addEventListener('click', async () => {
-            if (isAnimating) controls.animToggle.click();
-            controls.btnRecordLoop.disabled = true;
-            controls.btnRecordLoop.textContent = "Rendering Loop...";
-            controls.recProgressContainer.style.display = "block";
-            controls.recProgressBar.style.width = "0%";
 
-            const targetRes = parseInt(controls.recQuality.value); 
-            const originalW = canvas.width;
-            const originalH = canvas.height;
-            const originalPhase = state.phase;
-            
-            canvas.width = targetRes;
-            canvas.height = targetRes;
-            W = canvas.width;
-            H = canvas.height;
-            centerX = W / 2;
-            centerY = H / 2;
-
-            const warmupCycles = parseInt(controls.warmupCycles.value) || 0;
-            const phaseStep = 0.005; 
-            const framesPerCycle = 2.0 / phaseStep; 
-            
-            // Start phase depends on direction
-            state.phase = (animDirection === 1) ? 0 : 2.0;
-            
-            if (state.trailsEnabled && warmupCycles > 0) {
-                controls.btnRecordLoop.textContent = "Warming Up...";
-                const totalWarmupFrames = framesPerCycle * warmupCycles;
-                for (let i = 0; i < totalWarmupFrames; i++) {
-                    if (i % 20 === 0) await new Promise(r => setTimeout(r, 0));
-                    // Run warmup in correct direction to establish trails
-                    state.phase += phaseStep * animDirection;
-                    if (state.phase >= 2) state.phase -= 2;
-                    if (state.phase < 0) state.phase += 2;
-                    draw(); 
-                }
-            }
-            
-            // Reset phase again for actual recording
-            state.phase = (animDirection === 1) ? 0 : 2.0;
-
-            // Prioritize MP4 if supported
-            let mimeType = "video/webm";
-            let ext = "webm";
-            
-            if (MediaRecorder.isTypeSupported("video/mp4")) {
-                mimeType = "video/mp4";
-                ext = "mp4";
-            } else if (MediaRecorder.isTypeSupported("video/webm; codecs=vp9")) {
-                mimeType = "video/webm; codecs=vp9";
-            }
-            
-            const stream = canvas.captureStream(60);
-            const recorder = new MediaRecorder(stream, {
-                mimeType: mimeType,
-                videoBitsPerSecond: 25000000 
-            });
-
-            const chunks = [];
-            recorder.ondataavailable = e => chunks.push(e.data);
-            recorder.onstop = () => {
-                const blob = new Blob(chunks, { type: mimeType });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `loop_${targetRes}p.${ext}`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                canvas.width = originalW;
-                canvas.height = originalH;
-                W = originalW;
-                H = originalH;
-                centerX = W/2;
-                centerY = H/2;
-                state.phase = originalPhase;
-                controls.btnRecordLoop.disabled = false;
-                controls.btnRecordLoop.textContent = "Record Seamless Loop";
-                controls.recProgressContainer.style.display = "none";
-                updateState(); 
-            };
-
-            controls.btnRecordLoop.textContent = "Recording...";
-            recorder.start();
-            
-            const totalFrames = framesPerCycle; 
-            let currentFrame = 0;
-            
-            function recordTick() {
-                if (currentFrame > totalFrames) { 
-                    recorder.stop();
-                    return;
-                }
-                
-                // Calc current raw progress 0..2
-                let rawProgress = currentFrame * phaseStep;
-                
-                if (animDirection === -1) {
-                    // Reverse: 2.0 -> 0.0
-                    state.phase = 2.0 - rawProgress;
-                    // Handle tiny precision errors near 0
-                    if(state.phase < 0) state.phase = 0;
-                } else {
-                    // Forward: 0.0 -> 2.0
-                    state.phase = rawProgress;
-                }
-
-                draw();
-                
-                const pct = Math.round((currentFrame / totalFrames) * 100);
-                controls.recProgressBar.style.width = `${pct}%`;
-                
-                currentFrame++;
-                setTimeout(recordTick, 1000/60); 
-            }
-            
-            recordTick();
-        });
 
         function hexToRgb(hex) {
             const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -1156,6 +1062,7 @@
         function getInterpolatedBaseRadius(i, total) {
             const range = state.endRadius - state.startRadius; 
             let t = (total > 1) ? i / (total - 1) : 0;
+            
             if (state.layoutMode === 'concentric') {
                 const isSpiral = (state.angleOffsetMode === 'rotateCenters');
                 if (!isSpiral && i === 0 && state.distLog < 1.0 && total > 1) {
@@ -1198,6 +1105,7 @@
         function calculateShapeRadius(overallIndex, totalOverallCount) {
              const currentAmp = getInterpolatedAmplitude(overallIndex, totalOverallCount); 
              const currentBaseRadius = getInterpolatedBaseRadius(overallIndex, totalOverallCount); 
+
              if (state.modTarget === 'outline') {
                 return currentBaseRadius + Math.abs(currentAmp) * 0.05; 
              } else {
@@ -1241,6 +1149,7 @@
             const scaleFactor = W / DEFAULT_SIZE; 
             const segments = svgElements ? EXPORT_SEGMENTS : SCREEN_SEGMENTS;
             const distortionAmp = currentAmplitude * 0.05; 
+            
             const phaseNorm = state.phase / 2; 
             const cycles = state.freq;
             let points = []; 
@@ -1265,7 +1174,7 @@
             }
             ctx.closePath();
             ctx.strokeStyle = currentColor;
-            ctx.lineWidth = currentLineWidth * scaleFactor; 
+            ctx.lineWidth = currentLineWidth * scaleFactor;
             ctx.stroke();
 
             if (svgElements && points.length > 3) { 
@@ -1360,6 +1269,7 @@
                 const r1 = seededRandom(seedMix); 
                 const r2 = seededRandom(seedMix + 9999);
                 
+                // Random Length Logic (Global Offset)
                 const rangeGlobal = globalEndR - globalStartR;
                 const offset1 = r1 * rangeGlobal * 0.9; 
                 const offset2 = r2 * rangeGlobal * 0.9;
@@ -1378,7 +1288,7 @@
                     }
                 }
                 
-                let modLineFactor = 0;
+                // Modulation Logic
                 const t_line_index = i / N;
                 const modInputLine = (t_line_index * state.freq) + phaseNorm;
                 const waveFn = waveforms[state.selectedWaveform];
@@ -1394,6 +1304,8 @@
                 for(let j = 0; j <= segments; j++) {
                     const t = j / segments; 
                     const currentR_raw = R_inner + (t * localRange);
+                    
+                    // Normalize using unscaled values (GLOBAL NORMALIZATION)
                     let globalT = 0;
                     if (rangeGlobal > 0) globalT = (currentR_raw - globalStartR) / rangeGlobal;
 
@@ -1423,6 +1335,7 @@
                     spinePoints.push({x, y, w: currentWidth * scaleFactor}); 
                 }
                 
+                // Draw Polygon
                 let leftEdge = [];
                 let rightEdge = [];
                 for (let k = 0; k < spinePoints.length; k++) {
@@ -1499,9 +1412,58 @@
             }
         }
         
-        // Calculate Spiral functions same as before, used for path generation if needed
-        // ... (omitted for brevity, but keep logic if restoring path drawing) ...
-        // For now, focusing on drawing shapes
+        // (Spiral calculation funcs removed for brevity as user isn't using them in baseline)
+        function calculateSpiralAngle(i, N, totalSpirals, maxSpiralAngle, spiralOffset, s) {
+            if (state.spiralType === 'fermat') {
+                const t_linear = N > 0 ? (i + 1) / N : 0; 
+                const baseAngle = t_linear * maxSpiralAngle; 
+                return baseAngle + spiralOffset;
+            } else { 
+                const overall_index_in_total = (s * N) + i; 
+                const baseAngle = overall_index_in_total * GOLDEN_ANGLE;
+                return baseAngle; 
+            }
+        }
+        function calculateSpiralRadius(i, N, R_max_center, totalSpirals) {
+            let t_linear = N > 0 ? (i + 1) / N : 0; 
+            let t_radial = applyLogScale(t_linear, state.pathLog); 
+            let R_unscaled = Math.pow(t_radial, 0.5); 
+            return R_unscaled * R_max_center;
+        }
+        function drawHighPrecisionSpiralPath() {
+             // (Existing logic from previous iterations, kept for compatibility if needed)
+             if (state.arrayPath !== 'fibonacci') return; 
+             ctx.strokeStyle = '#FF00FF'; ctx.lineWidth = 1; 
+             const count_per_spiral = state.count;
+             const maxAngle = state.spiralTurns * Math.PI * 2; 
+             for (let s = 0; s < state.numSpirals; s++) {
+                ctx.beginPath();
+                const spiralOffset = s * (Math.PI * 2 / state.numSpirals);
+                const N = count_per_spiral;
+                if (N <= 0) continue; 
+                const R_last = calculateShapeRadius(N - 1, N);
+                const R_max_center_boundary = state.arrayRadius - R_last; 
+                for (let i = 0; i < SPIRAL_DEBUG_SEGMENTS; i++) {
+                    const t_linear = (i + 1) / SPIRAL_DEBUG_SEGMENTS; 
+                    const t_radial = applyLogScale(t_linear, state.pathLog);
+                    const radius = Math.pow(t_radial, 0.5) * R_max_center_boundary;
+                    let angle;
+                    if(state.spiralType === 'fermat') {
+                        const baseAngle = t_linear * maxAngle;
+                        angle = baseAngle + spiralOffset;
+                    } else {
+                         const virtual_index = t_linear * N;
+                         const overall_index = (s * N) + virtual_index;
+                         angle = overall_index * GOLDEN_ANGLE;
+                    }
+                    const x = centerX + Math.cos(angle) * radius;
+                    const y = centerY + Math.sin(angle) * radius;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+        }
 
         function drawRadialArray(svgData) {
             const scaleFactor = W / DEFAULT_SIZE;
@@ -1509,6 +1471,9 @@
             const N = state.count; 
             const totalSpirals = state.numSpirals;
 
+            if (state.arrayPath === 'fibonacci' && state.drawPathCurve && !svgData) {
+                drawHighPrecisionSpiralPath();
+            }
             if (N === 0) return;
 
             const R_first = calculateShapeRadius(0, N); 
@@ -1523,11 +1488,7 @@
 
             for (let s = 0; s < totalSpirals; s++) { 
                 for (let i = 0; i < N; i++) { 
-                    let angle;
-                    let radius;
-                    let t = (N > 1) ? i / (N - 1) : 0; 
-                    if (N === 1) t = 0;
-                    
+                    let t = (N > 1) ? i / (N - 1) : 0; if (N === 1) t = 0;
                     const currentBaseRadius = getInterpolatedBaseRadius(i, N); 
                     const currentAmp = getInterpolatedAmplitude(i, N); 
                     const currentLineWidth = getInterpolatedLineWidth(i, N); 
@@ -1535,12 +1496,18 @@
                     const modInput = i * state.freq;
                     const interpolatedSides = getInterpolatedSides(i, N); 
                     
-                    // Standard Radial
-                    radius = state.arrayRadius; 
-                    angle = startAngleRad + t * totalAngleRange;
-                    
-                    // Calculate CENTER
-                    // Apply Scale Factor to Center Position
+                    let radius, angle;
+                    if (state.arrayPath === 'fibonacci') {
+                        const R_max_center_boundary = state.arrayRadius - R_last;
+                        radius = calculateSpiralRadius(i, N, R_max_center_boundary, totalSpirals);
+                        const spiralOffset = s * (Math.PI * 2 / totalSpirals);
+                        const maxSpiralAngle = state.spiralTurns * Math.PI * 2;
+                        angle = calculateSpiralAngle(i, N, totalSpirals, maxSpiralAngle, spiralOffset, s);
+                    } else {
+                        radius = state.arrayRadius; 
+                        angle = startAngleRad + t * totalAngleRange;
+                    }
+
                     const x = centerX + Math.cos(angle) * radius * scaleFactor; 
                     const y = centerY + Math.sin(angle) * radius * scaleFactor;
                     const center = { x, y };
@@ -1603,7 +1570,7 @@
                 const currentColor = getInterpolatedColor(i, totalCount);
                 const interpolatedSides = getInterpolatedSides(i, totalCount);
 
-                // Apply Scale Factor to Offset Center
+                // Apply Scale Factor
                 const shapeCenter = { 
                     x: centerX + Math.cos(shapeRotationAngle) * currentCenterR * scaleFactor, 
                     y: centerY + Math.sin(shapeRotationAngle) * currentCenterR * scaleFactor
@@ -1633,18 +1600,16 @@
             if (!exporting) {
                 // FX LOGIC
                 if (state.trailsEnabled) {
-                    if (state.glowEnabled) {
-                         ctx.globalCompositeOperation = 'lighter';
-                    } else {
-                         ctx.globalCompositeOperation = 'source-over';
-                    }
+                    if (state.glowEnabled) ctx.globalCompositeOperation = 'lighter';
+                    else ctx.globalCompositeOperation = 'source-over';
+
                     const savedOp = ctx.globalCompositeOperation;
                     ctx.globalCompositeOperation = 'source-over';
                     ctx.fillStyle = `rgba(0, 0, 0, ${state.trailDecay})`;
                     ctx.fillRect(0, 0, W, H);
                     if (state.trailZ > 0) {
                         const scaleFactor = W / DEFAULT_SIZE;
-                        const shrinkage = state.trailZ * scaleFactor; // Scale shrink effect too!
+                        const shrinkage = state.trailZ * scaleFactor; 
                         ctx.drawImage(canvas, shrinkage/2, shrinkage/2, W-shrinkage, H-shrinkage);
                     }
                     ctx.globalCompositeOperation = savedOp;
@@ -1704,7 +1669,6 @@
 
             state.startColor = controls.startColor.value;
             state.endColor = controls.endColor.value;
-            // tiltX/panY removed
             
             state.freq = parseInt(controls.freq.value);
             state.phase = parseFloat(controls.phase.value);
@@ -1779,14 +1743,15 @@
             controls.radialControls.classList.add('hidden');
             controls.concentricControls.classList.add('hidden');
             controls.modTargetGroup.classList.remove('hidden');
+            controls.radiatingModOptions.classList.add('hidden'); 
             
-            // Toggle Groups Based on Mode
             if (state.layoutMode === 'radiating') {
                 controls.shapeMorphGroup.classList.add('hidden');
                 controls.randomLengthGroup.classList.remove('hidden');
                 controls.radialAngleGroup.classList.add('hidden');
                 controls.radialShapeRotGroup.classList.add('hidden'); 
                 controls.concentricRotationGroup.classList.remove('hidden'); 
+                controls.radiatingModOptions.classList.remove('hidden'); 
             } else if (state.layoutMode === 'radial') {
                 controls.shapeMorphGroup.classList.remove('hidden');
                 controls.randomLengthGroup.classList.add('hidden');
@@ -1883,7 +1848,10 @@
             updateState();
         }
 
-        function handleExport() {
+        // --- EXPORT HANDLERS ---
+        
+        // SVG Export
+        controls.exportSVG.addEventListener('click', () => {
             const result = draw(true); 
             const svgElements = result.elements;
             const svgDefs = result.defs ? result.defs.join('\n') : '';
@@ -1910,7 +1878,188 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-        }
+        });
+
+        // PNG Export (4K) with Pre-roll
+        controls.exportPNG.addEventListener('click', async () => {
+            if (isAnimating) controls.animToggle.click(); // Pause first
+
+            const targetSize = 4096; 
+            const originalW = canvas.width;
+            const originalH = canvas.height;
+            const originalPhase = state.phase;
+            
+            const originalBtnText = controls.exportPNG.textContent;
+            controls.exportPNG.textContent = "Rendering 4K...";
+            controls.exportPNG.disabled = true;
+
+            await new Promise(r => setTimeout(r, 10));
+
+            canvas.width = targetSize;
+            canvas.height = targetSize;
+            W = targetSize; H = targetSize;
+            centerX = W/2; centerY = H/2;
+            
+            if (state.trailsEnabled) {
+                const phaseStep = 0.005;
+                const cycleLength = 2.0;
+                const totalFrames = cycleLength / phaseStep;
+                let simPhase = originalPhase - cycleLength;
+                
+                for (let i = 0; i < totalFrames; i++) {
+                    if (i % 50 === 0) await new Promise(r => setTimeout(r, 0));
+
+                    let normalizedSimPhase = simPhase;
+                    while (normalizedSimPhase < 0) normalizedSimPhase += 2;
+                    while (normalizedSimPhase >= 2) normalizedSimPhase -= 2;
+                    state.phase = normalizedSimPhase;
+                    
+                    if (i === 0) {
+                        ctx.fillStyle = '#000';
+                        ctx.fillRect(0, 0, W, H);
+                    }
+                    draw(); 
+                    simPhase += phaseStep;
+                }
+                state.phase = originalPhase;
+                draw();
+            } else {
+                draw(true); 
+            }
+            
+            canvas.toBlob(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'generative_art_4k.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                canvas.width = originalW;
+                canvas.height = originalH;
+                W = originalW; H = originalH;
+                centerX = W/2; centerY = H/2;
+                state.phase = originalPhase;
+                controls.exportPNG.textContent = originalBtnText;
+                controls.exportPNG.disabled = false;
+                draw();
+            }, 'image/png');
+        });
+        
+        // Video Recording Logic
+        controls.btnRecordLoop.addEventListener('click', async () => {
+            if (isAnimating) controls.animToggle.click();
+            controls.btnRecordLoop.disabled = true;
+            controls.btnRecordLoop.textContent = "Rendering Loop...";
+            controls.recProgressContainer.style.display = "block";
+            controls.recProgressBar.style.width = "0%";
+
+            const targetRes = parseInt(controls.recQuality.value); 
+            const originalW = canvas.width;
+            const originalH = canvas.height;
+            const originalPhase = state.phase;
+            
+            canvas.width = targetRes;
+            canvas.height = targetRes;
+            W = canvas.width;
+            H = canvas.height;
+            centerX = W / 2;
+            centerY = H / 2;
+
+            const warmupCycles = parseInt(controls.warmupCycles.value) || 0;
+            const phaseStep = 0.005; 
+            const framesPerCycle = 2.0 / phaseStep; 
+            
+            state.phase = (animDirection === 1) ? 0 : 2.0;
+            
+            if (state.trailsEnabled && warmupCycles > 0) {
+                controls.btnRecordLoop.textContent = "Warming Up...";
+                const totalWarmupFrames = framesPerCycle * warmupCycles;
+                for (let i = 0; i < totalWarmupFrames; i++) {
+                    if (i % 20 === 0) await new Promise(r => setTimeout(r, 0));
+                    state.phase += phaseStep * animDirection;
+                    if (state.phase >= 2) state.phase -= 2;
+                    if (state.phase < 0) state.phase += 2;
+                    draw(); 
+                }
+            }
+            
+            state.phase = (animDirection === 1) ? 0 : 2.0;
+
+            let mimeType = "video/webm";
+            let ext = "webm";
+            
+            if (MediaRecorder.isTypeSupported("video/mp4")) {
+                mimeType = "video/mp4";
+                ext = "mp4";
+            } else if (MediaRecorder.isTypeSupported("video/webm; codecs=vp9")) {
+                mimeType = "video/webm; codecs=vp9";
+            }
+            
+            const stream = canvas.captureStream(60);
+            const recorder = new MediaRecorder(stream, {
+                mimeType: mimeType,
+                videoBitsPerSecond: 25000000 
+            });
+
+            const chunks = [];
+            recorder.ondataavailable = e => chunks.push(e.data);
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `loop_${targetRes}p.${ext}`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                canvas.width = originalW;
+                canvas.height = originalH;
+                W = originalW;
+                H = originalH;
+                centerX = W/2;
+                centerY = H/2;
+                state.phase = originalPhase;
+                controls.btnRecordLoop.disabled = false;
+                controls.btnRecordLoop.textContent = "Record Seamless Loop";
+                controls.recProgressContainer.style.display = "none";
+                updateState(); 
+            };
+
+            controls.btnRecordLoop.textContent = "Recording...";
+            recorder.start();
+            
+            const totalFrames = framesPerCycle; 
+            let currentFrame = 0;
+            
+            function recordTick() {
+                if (currentFrame > totalFrames) { 
+                    recorder.stop();
+                    return;
+                }
+                
+                let rawPhase = (currentFrame * phaseStep);
+                if (animDirection === -1) {
+                    state.phase = 2.0 - rawPhase;
+                    if(state.phase < 0) state.phase = 0;
+                } else {
+                    state.phase = rawPhase;
+                }
+
+                draw();
+                
+                const pct = Math.round((currentFrame / totalFrames) * 100);
+                controls.recProgressBar.style.width = `${pct}%`;
+                
+                currentFrame++;
+                setTimeout(recordTick, 1000/60); 
+            }
+            
+            recordTick();
+        });
 
         const allControls = Array.from(document.querySelectorAll('input[type="range"], input[type="color"], input[name="waveform"], input[name="modTarget"]'));
         allControls.forEach(control => control.addEventListener('input', updateState)); 
@@ -1927,7 +2076,6 @@
         controls.spiralTurns.addEventListener('input', updateState); 
         controls.pathLog.addEventListener('input', updateState);
         controls.drawPathCurve.addEventListener('change', updateState);
-        controls.exportButton.addEventListener('click', handleExport);
         // concentricAngleOffset removed
         controls.angleOffsetLog.addEventListener('input', updateState); 
         controls.targetRadios.forEach(radio => radio.addEventListener('change', handleTargetChange));
